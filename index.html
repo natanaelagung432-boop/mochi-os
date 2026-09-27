@@ -3,8 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mochi Controller & HUD</title>
+  <title>Mochi Controller & Dashboard (HUD)</title>
   <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: #161f30;
+      --primary: #00f2fe;
+      --accent: #4facfe;
+      --danger: #ff4b4b;
+      --warning: #ffb703;
+      --success: #00e676;
+      --text: #ffffff;
+      --text-dim: #94a3b8;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -13,314 +25,306 @@
     }
 
     body {
-      background-color: #0f172a;
-      color: #f8fafc;
-      min-height: 100vh;
+      background-color: var(--bg-color);
+      color: var(--text);
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
+      min-height: 100vh;
+      padding: 20px 15px;
     }
 
     header {
-      text-align: center;
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 20px;
     }
 
     h1 {
-      font-size: 1.8rem;
-      color: #38bdf8;
-      margin-bottom: 4px;
+      font-size: 1.2rem;
+      letter-spacing: 1px;
+      color: var(--primary);
+      text-transform: uppercase;
     }
 
-    p.subtitle {
-      font-size: 0.85rem;
-      color: #94a3b8;
-    }
-
-    .card {
-      background-color: #1e293b;
-      border-radius: 16px;
-      padding: 20px;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-      margin-bottom: 16px;
-      border: 1px solid #334155;
-    }
-
-    /* --- OLED MOCHI SCREEN --- */
-    .mochi-screen-container {
-      background-color: #000000;
-      border: 4px solid #334155;
+    .badge-status {
+      font-size: 0.8rem;
+      padding: 4px 10px;
       border-radius: 20px;
-      padding: 24px;
+      background: rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    /* MOCHI DISPLAY SIMULATOR */
+    .mochi-card {
+      background: #000000;
+      border: 3px solid #222;
+      border-radius: 24px;
+      padding: 25px 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 160px;
+      min-height: 220px;
       position: relative;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.15);
       overflow: hidden;
-      box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.05);
-      margin-bottom: 15px;
     }
 
-    .mochi-face {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      transition: all 0.2s ease;
-    }
-
-    .eyes-container {
+    .mochi-screen {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      width: 130px;
-      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      justify-content: center;
+      gap: 30px;
+      position: relative;
+      width: 100%;
+      height: 120px;
     }
 
+    /* EYES & ANIMATIONS */
     .eye {
-      width: 28px;
-      height: 40px;
-      background-color: #ffffff;
-      border-radius: 10px;
+      width: 45px;
+      height: 60px;
+      background-color: var(--primary);
+      border-radius: 12px;
       transition: all 0.2s ease;
-      box-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
+      position: relative;
+      box-shadow: 0 0 12px var(--primary);
     }
 
-    /* --- VARIASI MATA --- */
-    .eye.blink {
-      height: 4px !important;
-      margin-top: 18px;
-    }
-
-    .eye.sleepy {
-      height: 14px !important;
-      margin-top: 13px;
-      border-radius: 4px 4px 10px 10px;
-    }
-
-    .eye.shocked {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background-color: #ef4444;
-      box-shadow: 0 0 15px #ef4444;
-      animation: pulseShock 0.3s infinite alternate;
-    }
-
+    /* Mochi Expressions Mechanics */
+    .eye.look-left { transform: translateX(-15px); }
+    .eye.look-right { transform: translateX(15px); }
+    .eye.wink-left { transform: scaleY(0.1); }
+    .eye.sleepy { transform: scaleY(0.3) translateY(10px); }
+    
+    /* Happy Level 1 */
     .eye.happy {
-      height: 16px;
-      border-radius: 16px 16px 0 0;
-      background-color: #38bdf8;
-      box-shadow: 0 0 12px #38bdf8;
-    }
-
-    /* Melirik Kiri / Kanan */
-    .look-left { transform: translateX(-18px); }
-    .look-right { transform: translateX(18px); }
-
-    /* --- VARIASI MULUT --- */
-    .mouth {
-      width: 20px;
-      height: 6px;
-      background-color: #ffffff;
-      border-radius: 4px;
-      transition: all 0.2s ease;
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
-    }
-
-    .mouth.happy {
-      width: 28px;
-      height: 12px;
-      background-color: transparent;
-      border-bottom: 4px solid #38bdf8;
-      border-radius: 0 0 14px 14px;
+      height: 25px;
+      border-radius: 25px 25px 0 0;
+      background: transparent;
+      border: 8px solid var(--primary);
+      border-bottom: none;
       box-shadow: none;
     }
 
-    .mouth.yawn {
-      width: 16px;
-      height: 22px;
-      border-radius: 10px;
-      background-color: #ffffff;
+    /* Happy Level 2 - Heart Eyes */
+    .eye.heart {
+      background: transparent;
+      box-shadow: none;
+      width: 50px;
+      height: 50px;
+    }
+    .eye.heart::before, .eye.heart::after {
+      content: "";
+      position: absolute;
+      left: 25px;
+      top: 0;
+      width: 25px;
+      height: 40px;
+      background: #ff2a6d;
+      border-radius: 25px 25px 0 0;
+      transform: rotate(-45deg);
+      transform-origin: 0 100%;
+      box-shadow: 0 0 10px #ff2a6d;
+    }
+    .eye.heart::after {
+      left: 0;
+      transform: rotate(45deg);
+      transform-origin: 100% 100%;
     }
 
-    .mouth.whistle {
-      width: 10px;
+    /* Happy Level 3 - Sparkle & Wiggle */
+    .eye.sparkle {
+      background: #ff007f;
+      clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+      box-shadow: 0 0 15px #ff007f;
+      width: 50px;
+      height: 50px;
+    }
+
+    .wiggle {
+      animation: wiggleAnim 0.4s infinite alternate ease-in-out;
+    }
+
+    @keyframes wiggleAnim {
+      0% { transform: translateY(0) rotate(-3deg); }
+      100% { transform: translateY(-8px) rotate(3deg); }
+    }
+
+    /* Overspeed Panic */
+    .mochi-card.panic {
+      border-color: var(--danger);
+      animation: shake 0.15s infinite;
+    }
+    .eye.panic-eye {
+      background-color: var(--danger);
+      box-shadow: 0 0 15px var(--danger);
+      width: 55px;
+      height: 55px;
+      border-radius: 50%;
+    }
+
+    @keyframes shake {
+      0% { transform: translate(2px, 2px); }
+      50% { transform: translate(-2px, -2px); }
+      100% { transform: translate(2px, -2px); }
+    }
+
+    /* MOUTH */
+    .mouth {
+      position: absolute;
+      bottom: 15px;
+      width: 20px;
       height: 10px;
-      border-radius: 50%;
-      background-color: #38bdf8;
-      transform: translateX(6px);
-    }
-
-    .mouth.shocked {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background-color: #ef4444;
-      box-shadow: 0 0 12px #ef4444;
-      animation: pulseShock 0.3s infinite alternate;
-    }
-
-    @keyframes pulseShock {
-      0% { transform: scale(1); }
-      100% { transform: scale(1.15); }
-    }
-
-    /* --- BUTTONS & CONTROLS --- */
-    .status-container {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 600;
-      font-size: 0.9rem;
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background-color: #ef4444;
-      box-shadow: 0 0 8px #ef4444;
-    }
-
-    .dot.connected {
-      background-color: #22c55e;
-      box-shadow: 0 0 8px #22c55e;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 10px;
-      font-size: 0.95rem;
-      font-weight: bold;
-      cursor: pointer;
+      border-bottom: 4px solid var(--primary);
+      border-radius: 0 0 10px 10px;
       transition: all 0.2s ease;
     }
 
-    .btn-connect {
-      background-color: #22c55e;
-      color: white;
+    .mouth.open { height: 20px; border-radius: 50%; border: 4px solid var(--primary); }
+    .mouth.whistle { width: 12px; height: 12px; border: 3px solid var(--primary); border-radius: 50%; transform: translateX(10px); }
+    .mouth.panic-mouth { width: 30px; height: 25px; border: 4px solid var(--danger); border-radius: 50%; background: rgba(255, 75, 75, 0.2); }
+
+    /* MAPS OLED ARROWS */
+    .nav-arrow {
+      font-size: 3rem;
+      color: var(--primary);
+      text-shadow: 0 0 10px var(--primary);
+      display: none;
+      animation: blinkArrow 0.8s infinite alternate;
     }
 
-    .btn-disconnect {
-      background-color: #dc2626;
-      color: white;
-      margin-top: 8px;
+    @keyframes blinkArrow {
+      from { opacity: 0.3; }
+      to { opacity: 1; }
     }
 
-    .btn-test {
-      background-color: #334155;
-      color: #cbd5e1;
-      padding: 8px 12px;
-      font-size: 0.8rem;
-      border-radius: 6px;
-      border: 1px solid #475569;
-      cursor: pointer;
+    /* CONTROLS & TABS */
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 18px;
     }
 
-    .btn-test:hover {
-      background-color: #475569;
-    }
-
-    .test-group {
+    .tab-group {
       display: flex;
-      gap: 8px;
-      margin-top: 10px;
-      justify-content: center;
-    }
-
-    /* --- DASHBOARD --- */
-    .speed-display {
-      font-size: 3.8rem;
-      font-weight: 800;
-      color: #38bdf8;
-      line-height: 1;
-      text-align: center;
-      margin: 10px 0 4px 0;
-    }
-
-    .speed-unit {
-      text-align: center;
-      font-size: 0.85rem;
-      color: #64748b;
-      font-weight: 600;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px;
+      border-radius: 12px;
       margin-bottom: 15px;
     }
 
-    .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .info-box {
-      background-color: #0f172a;
+    .tab-btn {
+      flex: 1;
       padding: 10px;
-      border-radius: 8px;
-      text-align: center;
-      border: 1px solid #1e293b;
-    }
-
-    .info-label {
-      font-size: 0.7rem;
-      color: #64748b;
-      text-transform: uppercase;
-      margin-bottom: 2px;
-    }
-
-    .info-value {
-      font-size: 1rem;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
       font-weight: 600;
-      color: #e2e8f0;
-    }
-
-    .input-group {
-      margin-top: 12px;
-    }
-
-    .input-group label {
-      display: block;
-      font-size: 0.8rem;
-      color: #94a3b8;
-      margin-bottom: 4px;
-    }
-
-    .input-group input {
-      width: 100%;
-      padding: 8px 10px;
       border-radius: 8px;
-      border: 1px solid #334155;
-      background-color: #0f172a;
-      color: white;
-      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 0.85rem;
     }
 
-    .overspeed-alert {
-      border-color: #ef4444 !important;
-      animation: alertGlow 0.8s infinite alternate;
+    .tab-btn.active {
+      background: var(--primary);
+      color: #000;
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
     }
 
-    @keyframes alertGlow {
-      0% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.2); }
-      100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+    .panel { display: none; flex-direction: column; gap: 12px; }
+    .panel.active { display: flex; }
+
+    .btn {
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
 
-    .hidden {
-      display: none;
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--primary); color: #000; }
+    .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+    .btn-danger { background: var(--danger); color: #fff; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+    /* SPEEDOMETER HUD */
+    .hud-display {
+      text-align: center;
+      padding: 15px;
+    }
+
+    .speed-value {
+      font-size: 3.5rem;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1;
+      text-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+    }
+
+    .speed-unit { font-size: 0.9rem; color: var(--text-dim); margin-top: 5px; }
+
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .slider-container label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+    }
+
+    /* INFO FOOTER */
+    .info-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      padding: 0 5px;
     }
   </style>
 </head>
@@ -328,265 +332,371 @@
 
   <header>
     <h1>Mochi Controller</h1>
-    <p class="subtitle">Virtual OLED & BLE HUD</p>
+    <div class="badge-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Terputus</span>
+    </div>
   </header>
 
-  <!-- KARTU MOCHI OLED ANIMATED -->
-  <div class="card">
-    <div class="mochi-screen-container" id="screenBox">
-      <div class="mochi-face">
-        <div class="eyes-container" id="eyesContainer">
-          <div class="eye" id="leftEye"></div>
-          <div class="eye" id="rightEye"></div>
-        </div>
+  <div class="container">
+
+    <!-- MOCHI OLED SIMULATOR DISPLAY -->
+    <div class="mochi-card" id="mochiCard">
+      <div class="mochi-screen" id="mochiScreen">
+        <div class="nav-arrow" id="arrowLeft">❮❮</div>
+        <div class="eye" id="eyeLeft"></div>
         <div class="mouth" id="mochiMouth"></div>
+        <div class="eye" id="eyeRight"></div>
+        <div class="nav-arrow" id="arrowRight">❯❯</div>
       </div>
     </div>
 
-    <!-- TESTER EKSPRESI -->
-    <div class="test-group">
-      <button class="btn-test" onclick="setMood('NORMAL')">Gabut</button>
-      <button class="btn-test" onclick="setMood('HAPPY')">Happy</button>
-      <button class="btn-test" onclick="setMood('OVERSPEED')">Kaget</button>
-    </div>
-  </div>
+    <!-- MAIN NAVIGATION TABS -->
+    <div class="card">
+      <div class="tab-group">
+        <button class="tab-btn active" onclick="switchMode('NORMAL')">Normal</button>
+        <button class="tab-btn" onclick="switchMode('HAPPY')">Senang</button>
+        <button class="tab-btn" onclick="switchMode('RIDING')">Riding</button>
+        <button class="tab-btn" onclick="switchMode('MAPS')">Maps Mode</button>
+      </div>
 
-  <!-- KARTU KONEKSI BLE -->
-  <div class="card">
-    <div class="status-container">
-      <span>Status BLE:</span>
-      <div class="status-indicator">
-        <div id="statusDot" class="dot"></div>
-        <span id="statusText">Terputus</span>
+      <!-- PANEL 1: NORMAL MODE (GABUT 4 DETIK) -->
+      <div class="panel active" id="panelNORMAL">
+        <p style="font-size: 0.85rem; color: var(--text-dim);">Mode gabut otomatis berganti ekspresi tiap 4 detik (kedip, melirik, menguap, siul, wink).</p>
+        <div class="info-bar">
+          <span>Status Idle: <b id="idleStateText" style="color:var(--primary)">Aktif</b></span>
+          <span>Timer: <b>4s</b></span>
+        </div>
+      </div>
+
+      <!-- PANEL 2: HAPPY MODE (3 LEVEL TOUCH & HOLD) -->
+      <div class="panel" id="panelHAPPY">
+        <p style="font-size: 0.85rem; color: var(--text-dim);">Simulasi sentuhan/hold pada bodi Mochi:</p>
+        <div class="grid-3">
+          <button class="btn btn-outline" onclick="triggerHappy(1)">Level 1<br><small>(Tap)</small></button>
+          <button class="btn btn-outline" onclick="triggerHappy(2)">Level 2<br><small>(Hold 2s)</small></button>
+          <button class="btn btn-outline" onclick="triggerHappy(3)">Level 3<br><small>(Hold 5s)</small></button>
+        </div>
+      </div>
+
+      <!-- PANEL 3: RIDING MODE (HUD & SPEED) -->
+      <div class="panel" id="panelRIDING">
+        <div class="hud-display">
+          <div class="speed-value" id="speedDisplay">0</div>
+          <div class="speed-unit">KM/JAM</div>
+        </div>
+
+        <div class="slider-container">
+          <label>
+            <span>Simulasi Kecepatan</span>
+            <b id="simSpeedVal">0 km/jam</b>
+          </label>
+          <input type="range" id="simSpeedSlider" min="0" max="140" value="0" oninput="updateSimulatedSpeed(this.value)">
+        </div>
+
+        <div class="slider-container">
+          <label>
+            <span>Batas Kecepatan (Speed Limit)</span>
+            <b id="limitVal">80 km/jam</b>
+          </label>
+          <input type="range" id="limitSlider" min="30" max="120" value="80" oninput="updateSpeedLimit(this.value)">
+        </div>
+
+        <button class="btn btn-outline" style="margin-top:5px;" onclick="toggleGPS()" id="btnGPS">Aktifkan GPS HP</button>
+      </div>
+
+      <!-- PANEL 4: MAPS MODE (NAVIGATION CONTROL) -->
+      <div class="panel" id="panelMAPS">
+        <p style="font-size: 0.85rem; color: var(--text-dim);">Petunjuk arah navigasi untuk layar Mochi:</p>
+        <div class="grid-2">
+          <button class="btn btn-outline" onclick="triggerMaps('LEFT')">❮ Belok Kiri</button>
+          <button class="btn btn-outline" onclick="triggerMaps('RIGHT')">Belok Kanan ❯</button>
+        </div>
+        <div class="grid-2">
+          <button class="btn btn-outline" onclick="triggerMaps('STRAIGHT')">▲ Lurus / Mencepat</button>
+          <button class="btn btn-primary" onclick="triggerMaps('ARRIVED')">★ Sampai Tujuan</button>
+        </div>
       </div>
     </div>
 
-    <button id="connectBtn" class="btn btn-connect">Hubungkan ke Mochi</button>
-    <button id="disconnectBtn" class="btn btn-disconnect hidden">Putuskan Koneksi</button>
-  </div>
-
-  <!-- KARTU DASHBOARD SPEEDOMETER -->
-  <div class="card" id="dashboardCard">
-    <div class="info-label" style="text-align:center;">Kecepatan Kendaraan</div>
-    <div id="speedDisplay" class="speed-display">0</div>
-    <div class="speed-unit">KM/JAM</div>
-
-    <div class="info-grid">
-      <div class="info-box">
-        <div class="info-label">Jam Terhubung</div>
-        <div id="clockDisplay" class="info-value">00:00</div>
-      </div>
-      <div class="info-box">
-        <div class="info-label">Ekspresi Mochi</div>
-        <div id="moodDisplay" class="info-value">NORMAL</div>
-      </div>
+    <!-- BLUETOOTH CONTROL CARD -->
+    <div class="card grid-2">
+      <button class="btn btn-primary" onclick="connectBluetooth()">Hubungkan BLE</button>
+      <button class="btn btn-danger" onclick="disconnectBluetooth()">Putuskan</button>
     </div>
 
-    <div class="input-group">
-      <label for="speedLimitInput">Batas Kecepatan / Speed Limit (KM/H):</label>
-      <input type="number" id="speedLimitInput" value="80" min="10" max="200">
+    <!-- FOOTER INFO -->
+    <div class="info-bar">
+      <span>Jam: <b id="clockText">00:00</b></span>
+      <span>Payload: <b id="payloadText">-</b></span>
     </div>
+
   </div>
 
   <script>
+    // --- GLOBAL VARIABLES ---
+    let currentMode = 'NORMAL';
+    let bleDevice, bleServer, rxCharacteristic;
+    let idleTimer = null;
+    let currentSpeed = 0;
+    let speedLimit = 80;
+    let isGPSActive = false;
+    let watchId = null;
+
+    // UUID Bluetooth ESP32 (Atur Sesuai ESP32 Anda)
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-    let bleDevice = null;
-    let bleCharacteristic = null;
-    let watchId = null;
-
-    let currentSpeed = 0;
-    let speedLimit = 80;
-    let activeMood = "NORMAL";
-
-    const connectBtn = document.getElementById('connectBtn');
-    const disconnectBtn = document.getElementById('disconnectBtn');
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
-    const speedDisplay = document.getElementById('speedDisplay');
-    const clockDisplay = document.getElementById('clockDisplay');
-    const moodDisplay = document.getElementById('moodDisplay');
-    const speedLimitInput = document.getElementById('speedLimitInput');
-    const dashboardCard = document.getElementById('dashboardCard');
-
-    const leftEye = document.getElementById('leftEye');
-    const rightEye = document.getElementById('rightEye');
-    const eyesContainer = document.getElementById('eyesContainer');
+    // --- DOM ELEMENTS ---
+    const eyeLeft = document.getElementById('eyeLeft');
+    const eyeRight = document.getElementById('eyeRight');
     const mochiMouth = document.getElementById('mochiMouth');
-    const screenBox = document.getElementById('screenBox');
+    const mochiCard = document.getElementById('mochiCard');
+    const mochiScreen = document.getElementById('mochiScreen');
+    const arrowLeft = document.getElementById('arrowLeft');
+    const arrowRight = document.getElementById('arrowRight');
 
-    // --- MANAJEMEN EKSPRESI ---
-    function resetFace() {
-      leftEye.className = "eye";
-      rightEye.className = "eye";
-      eyesContainer.className = "eyes-container";
-      mochiMouth.className = "mouth";
-      screenBox.classList.remove('overspeed-alert');
+    // --- INITIALIZATION ---
+    window.onload = () => {
+      startClock();
+      startIdleLoop();
+    };
+
+    // --- CLOCK ---
+    function startClock() {
+      setInterval(() => {
+        const now = new Date();
+        const timeStr = now.toTimeString().split(' ')[0].substring(0, 5);
+        document.getElementById('clockText').innerText = timeStr;
+      }, 1000);
     }
 
-    function setMood(mood) {
-      activeMood = mood;
-      moodDisplay.innerText = mood;
-      resetFace();
+    // --- MODE SWITCHING ---
+    function switchMode(mode) {
+      currentMode = mode;
+      
+      // Update Tabs UI
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(`panel${mode}`).classList.add('active');
 
-      if (mood === "OVERSPEED") {
-        leftEye.classList.add('shocked');
-        rightEye.classList.add('shocked');
-        mochiMouth.classList.add('shocked');
-        screenBox.classList.add('overspeed-alert');
-      } else if (mood === "HAPPY") {
-        leftEye.classList.add('happy');
-        rightEye.classList.add('happy');
-        mochiMouth.classList.add('happy');
+      resetMochiVisual();
+
+      if (mode === 'NORMAL') {
+        startIdleLoop();
+      } else {
+        stopIdleLoop();
       }
+
+      if (mode === 'RIDING') {
+        evaluateRidingState();
+      }
+
+      sendBluetoothPayload();
     }
 
-    // --- ANIMASI AGILE / ORANG GABUT (RANDOM BEHAVIOR) ---
-    function triggerRandomIdleAction() {
-      if (activeMood !== "NORMAL") return;
+    function resetMochiVisual() {
+      eyeLeft.className = 'eye';
+      eyeRight.className = 'eye';
+      mochiMouth.className = 'mouth';
+      mochiCard.className = 'mochi-card';
+      mochiScreen.className = 'mochi-screen';
+      arrowLeft.style.display = 'none';
+      arrowRight.style.display = 'none';
+    }
 
-      resetFace();
-      const actions = ["blink", "look_left", "look_right", "yawn", "whistle", "wink"];
-      const randomAction = actions[Math.floor(Math.random() * actions.length)];
+    // --- 1. MODE NORMAL (GABUT 4 DETIK) ---
+    function startIdleLoop() {
+      stopIdleLoop();
+      runRandomIdleAnimation();
+      idleTimer = setInterval(runRandomIdleAnimation, 4000);
+    }
 
-      if (randomAction === "blink") {
-        leftEye.classList.add('blink');
-        rightEye.classList.add('blink');
-        setTimeout(resetFace, 200);
+    function stopIdleLoop() {
+      if (idleTimer) clearInterval(idleTimer);
+    }
 
-      } else if (randomAction === "look_left") {
-        eyesContainer.classList.add('look-left');
-        setTimeout(resetFace, 1500);
+    function runRandomIdleAnimation() {
+      if (currentMode !== 'NORMAL') return;
 
-      } else if (randomAction === "look_right") {
-        eyesContainer.classList.add('look-right');
-        setTimeout(resetFace, 1500);
+      resetMochiVisual();
+      const rand = Math.floor(Math.random() * 5);
 
-      } else if (randomAction === "yawn") {
-        leftEye.classList.add('sleepy');
-        rightEye.classList.add('sleepy');
-        mochiMouth.classList.add('yawn');
-        setTimeout(resetFace, 2000);
+      switch (rand) {
+        case 0: // Melirik Kanan
+          eyeLeft.classList.add('look-right');
+          eyeRight.classList.add('look-right');
+          document.getElementById('idleStateText').innerText = "Melirik Kanan";
+          break;
+        case 1: // Melirik Kiri
+          eyeLeft.classList.add('look-left');
+          eyeRight.classList.add('look-left');
+          document.getElementById('idleStateText').innerText = "Melirik Kiri";
+          break;
+        case 2: // Mengantuk
+          eyeLeft.classList.add('sleepy');
+          eyeRight.classList.add('sleepy');
+          mochiMouth.classList.add('open');
+          document.getElementById('idleStateText').innerText = "Mengantuk/Menguap";
+          break;
+        case 3: // Siul
+          mochiMouth.classList.add('whistle');
+          document.getElementById('idleStateText').innerText = "Bersenandung/Siul";
+          break;
+        case 4: // Wink
+          eyeLeft.classList.add('wink-left');
+          document.getElementById('idleStateText').innerText = "Wink / Berkedip";
+          break;
+      }
+      sendBluetoothPayload();
+    }
 
-      } else if (randomAction === "whistle") {
-        leftEye.classList.add('happy');
-        rightEye.classList.add('happy');
+    // --- 2. MODE SENANG (3 LEVEL TOUCH HOLD) ---
+    function triggerHappy(level) {
+      resetMochiVisual();
+
+      if (level === 1) { // Tap Singkat
+        eyeLeft.classList.add('happy');
+        eyeRight.classList.add('happy');
+      } else if (level === 2) { // Hold 2s - Heart Eyes
+        eyeLeft.classList.add('heart');
+        eyeRight.classList.add('heart');
+        mochiMouth.classList.add('open');
+      } else if (level === 3) { // Hold 5s - Sparkle & Wiggle
+        eyeLeft.classList.add('sparkle');
+        eyeRight.classList.add('sparkle');
+        mochiMouth.classList.add('open');
+        mochiScreen.classList.add('wiggle');
+      }
+
+      sendBluetoothPayload(`HAPPY_L${level}`);
+    }
+
+    // --- 3. RIDING MODE & SPEEDOMETER ---
+    function updateSimulatedSpeed(val) {
+      currentSpeed = parseInt(val);
+      document.getElementById('simSpeedVal').innerText = `${currentSpeed} km/jam`;
+      document.getElementById('speedDisplay').innerText = currentSpeed;
+      if (currentMode === 'RIDING') evaluateRidingState();
+    }
+
+    function updateSpeedLimit(val) {
+      speedLimit = parseInt(val);
+      document.getElementById('limitVal').innerText = `${speedLimit} km/jam`;
+      if (currentMode === 'RIDING') evaluateRidingState();
+    }
+
+    function evaluateRidingState() {
+      resetMochiVisual();
+      const ratio = currentSpeed / speedLimit;
+
+      if (ratio > 1.0) { // Overspeed Panic (>100%)
+        mochiCard.classList.add('panic');
+        eyeLeft.classList.add('panic-eye');
+        eyeRight.classList.add('panic-eye');
+        mochiMouth.classList.add('panic-mouth');
+        sendBluetoothPayload('RIDE_PANIC');
+      } else if (ratio > 0.5) { // Happy Ride (51 - 95%)
+        eyeLeft.classList.add('happy');
+        eyeRight.classList.add('happy');
+        mochiMouth.classList.add('open');
+        sendBluetoothPayload('RIDE_HAPPY');
+      } else { // Cruising Santai (0 - 50%)
         mochiMouth.classList.add('whistle');
-        setTimeout(resetFace, 1800);
-
-      } else if (randomAction === "wink") {
-        leftEye.classList.add('blink');
-        setTimeout(resetFace, 300);
+        sendBluetoothPayload('RIDE_SANTAI');
       }
     }
 
-    // Jalankan gerakan acak setiap 3.5 - 6 detik sekali
-    setInterval(triggerRandomIdleAction, 4000);
+    function toggleGPS() {
+      if (!isGPSActive) {
+        if ("geolocation" in navigator) {
+          watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+              const speedMs = pos.coords.speed || 0;
+              currentSpeed = Math.round(speedMs * 3.6); // Convert m/s to km/h
+              document.getElementById('speedDisplay').innerText = currentSpeed;
+              document.getElementById('simSpeedSlider').value = currentSpeed;
+              document.getElementById('simSpeedVal').innerText = `${currentSpeed} km/jam`;
+              if (currentMode === 'RIDING') evaluateRidingState();
+            },
+            (err) => alert("Gagal mengambil lokasi GPS: " + err.message),
+            { enableHighAccuracy: true }
+          );
+          isGPSActive = true;
+          document.getElementById('btnGPS').innerText = "Matikan GPS HP";
+          document.getElementById('btnGPS').classList.replace('btn-outline', 'btn-danger');
+        }
+      } else {
+        navigator.geolocation.clearWatch(watchId);
+        isGPSActive = false;
+        document.getElementById('btnGPS').innerText = "Aktifkan GPS HP";
+        document.getElementById('btnGPS').classList.replace('btn-danger', 'btn-outline');
+      }
+    }
 
-    // --- BLE & GPS LOGIC ---
-    speedLimitInput.addEventListener('change', (e) => {
-      speedLimit = parseInt(e.target.value) || 80;
-    });
+    // --- 4. MAPS MODE (NAVIGATION CONTROL) ---
+    function triggerMaps(direction) {
+      resetMochiVisual();
 
-    connectBtn.addEventListener('click', async () => {
+      if (direction === 'LEFT') {
+        arrowLeft.style.display = 'block';
+        eyeLeft.classList.add('look-left');
+        eyeRight.classList.add('look-left');
+      } else if (direction === 'RIGHT') {
+        arrowRight.style.display = 'block';
+        eyeLeft.classList.add('look-right');
+        eyeRight.classList.add('look-right');
+      } else if (direction === 'STRAIGHT') {
+        mochiMouth.classList.add('open');
+      } else if (direction === 'ARRIVED') {
+        triggerHappy(3); // Selebrasi
+        return;
+      }
+
+      sendBluetoothPayload(`MAPS_${direction}`);
+    }
+
+    // --- BLUETOOTH BLE COMMUNICATION ---
+    async function connectBluetooth() {
       try {
-        statusText.innerText = "Mencari Mochi...";
         bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'DASAI_MOCHI' }],
+          filters: [{ namePrefix: 'Mochi' }],
           optionalServices: [SERVICE_UUID]
         });
 
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        bleServer = await bleDevice.gatt.connect();
+        const service = await bleServer.getPrimaryService(SERVICE_UUID);
+        rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-        const server = await bleDevice.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-
-        statusDot.classList.add('connected');
-        statusText.innerText = "Terhubung";
-        connectBtn.classList.add('hidden');
-        disconnectBtn.classList.remove('hidden');
-
-        setMood("HAPPY");
-        setTimeout(() => setMood("NORMAL"), 2000);
-
-        startGPSWatch();
-        setInterval(sendDataToMochi, 1000);
-
-      } catch (error) {
-        console.error("Gagal terhubung:", error);
-        statusText.innerText = "Gagal Terhubung";
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('statusText').innerText = "Terhubung";
+        sendBluetoothPayload();
+      } catch (err) {
+        alert("Koneksi Bluetooth Gagal: " + err);
       }
-    });
+    }
 
-    disconnectBtn.addEventListener('click', () => {
+    function disconnectBluetooth() {
       if (bleDevice && bleDevice.gatt.connected) {
         bleDevice.gatt.disconnect();
       }
-    });
-
-    function onDisconnected() {
-      statusDot.classList.remove('connected');
-      statusText.innerText = "Terputus";
-      connectBtn.classList.remove('hidden');
-      disconnectBtn.classList.add('hidden');
-
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-      setMood("NORMAL");
+      document.getElementById('statusDot').classList.remove('connected');
+      document.getElementById('statusText').innerText = "Terputus";
     }
 
-    function startGPSWatch() {
-      if ("geolocation" in navigator) {
-        watchId = navigator.geolocation.watchPosition(
-          (position) => {
-            let speedMps = position.coords.speed;
-            if (speedMps !== null && speedMps > 0) {
-              currentSpeed = Math.round(speedMps * 3.6);
-            } else {
-              currentSpeed = 0;
-            }
-            updateUI();
-          },
-          (error) => {
-            console.warn("GPS Error:", error.message);
-          },
-          { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-        );
-      }
-    }
+    function sendBluetoothPayload(customDetail = "") {
+      const timeStr = document.getElementById('clockText').innerText;
+      let detail = customDetail || document.getElementById('idleStateText').innerText;
+      
+      // Payload Format: Kecepatan | Mode | Detail/Arah | Jam
+      const payload = `${currentSpeed}|${currentMode}|${detail}|${timeStr}`;
+      document.getElementById('payloadText').innerText = payload;
 
-    function sendDataToMochi() {
-      if (!bleCharacteristic) return;
-
-      const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const timeStr = `${hours}:${minutes}`;
-
-      if (currentSpeed > speedLimit) {
-        setMood("OVERSPEED");
-      } else if (activeMood !== "HAPPY") {
-        if (activeMood === "OVERSPEED") setMood("NORMAL");
-      }
-
-      const payload = `${currentSpeed}|${activeMood}|${timeStr}|${speedLimit}`;
-
-      const encoder = new TextEncoder();
-      bleCharacteristic.writeValue(encoder.encode(payload))
-        .catch(err => console.error("Gagal kirim data:", err));
-
-      clockDisplay.innerText = timeStr;
-    }
-
-    function updateUI() {
-      speedDisplay.innerText = currentSpeed;
-      if (currentSpeed > speedLimit) {
-        dashboardCard.classList.add('overspeed-alert');
-      } else {
-        dashboardCard.classList.remove('overspeed-alert');
+      if (rxCharacteristic && bleDevice.gatt.connected) {
+        const encoder = new TextEncoder();
+        rxCharacteristic.writeValue(encoder.encode(payload));
       }
     }
   </script>
