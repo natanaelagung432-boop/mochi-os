@@ -1,277 +1,368 @@
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
-
-#define TOUCH_PIN 4
-#define TOUCH_THRESHOLD 40
-#define BUZZER_PIN 18
-
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET    -1
-#define SCREEN_ADDRESS 0x3C
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-
-BLEServer* pServer = NULL;
-BLECharacteristic* pCharacteristic = NULL;
-bool deviceConnected = false;
-unsigned long lastDataTime = 0;
-
-int currentSpeed = 0;
-int userSpeedLimit = 80; // Default limit 80 KM/H
-String currentMood = "NORMAL";
-String currentTimeStr = "00:00";
-String currentTempStr = "--C";
-String currentWeatherStr = "CLEAR";
-
-int currentDisplayMode = 0; 
-int tapCount = 0;
-unsigned long lastTapTime = 0;
-bool lastTouchState = false;
-unsigned long lastAlarmTime = 0;
-
-void playBeepClick() {
-  tone(BUZZER_PIN, 1000, 50);
-}
-
-void playHappySound() {
-  tone(BUZZER_PIN, 523, 80); delay(90);
-  tone(BUZZER_PIN, 659, 80); delay(90);
-  tone(BUZZER_PIN, 784, 120); delay(130);
-  noTone(BUZZER_PIN);
-}
-
-void playOverspeedAlarm() {
-  // Alarm peringatan batas kecepatan
-  tone(BUZZER_PIN, 2000, 100);
-}
-
-class MyServerCallbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) { 
-      deviceConnected = true; 
-      playHappySound(); 
-    };
-    void onDisconnect(BLEServer* pServer) {
-      deviceConnected = false;
-      BLEDevice::startAdvertising();
-    }
-};
-
-class MyCallbacks: public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pCharacteristic) {
-      String rxValue = pCharacteristic->getValue().c_str();
-      if (rxValue.length() > 0) {
-        lastDataTime = millis();
-        int p1 = rxValue.indexOf('|');
-        int p2 = rxValue.indexOf('|', p1 + 1);
-        int p3 = rxValue.indexOf('|', p2 + 1);
-        int p4 = rxValue.indexOf('|', p3 + 1);
-        int p5 = rxValue.indexOf('|', p4 + 1);
-
-        if (p1 != -1) currentSpeed = rxValue.substring(0, p1).toInt();
-        if (p2 != -1) currentMood = rxValue.substring(p1 + 1, p2);
-        if (p3 != -1) currentTimeStr = rxValue.substring(p2 + 1, p3);
-        if (p4 != -1) currentTempStr = rxValue.substring(p3 + 1, p4);
-        if (p5 != -1) currentWeatherStr = rxValue.substring(p4 + 1, p5);
-        if (p5 != -1) userSpeedLimit = rxValue.substring(p5 + 1).toInt();
-      }
-    }
-};
-
-void drawRidingMode() {
-  display.clearDisplay();
-  
-  // Deteksi Overspeed
-  if (currentSpeed >= userSpeedLimit && userSpeedLimit > 0) {
-    // Ekspresi Kaget/Panik (> <)
-    display.drawLine(20, 20, 35, 30, SSD1306_WHITE);
-    display.drawLine(20, 40, 35, 30, SSD1306_WHITE);
-    display.drawLine(108, 20, 93, 30, SSD1306_WHITE);
-    display.drawLine(108, 40, 93, 30, SSD1306_WHITE);
-
-    // Alarm Suara Setiap 500ms
-    if (millis() - lastAlarmTime > 500) {
-      playOverspeedAlarm();
-      lastAlarmTime = millis();
-    }
-  } else {
-    // Ekspresi Mata Normal
-    display.fillRect(30, 24, 16, 16, SSD1306_WHITE);
-    display.fillRect(82, 24, 16, 16, SSD1306_WHITE);
-  }
-
-  display.setTextSize(2);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(50, 20);
-  display.print(currentSpeed);
-  display.setTextSize(1);
-  display.setCursor(52, 40);
-  display.print("KM/H");
-  display.display();
-}
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(BUZZER_PIN, OUTPUT);
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    for (;;);
-  }
-  display.clearDisplay();
-
-  BLEDevice::init("DASAI_MOCHI");
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
-
-  BLEService *pService = pServer->createService(SERVICE_UUID);
-  pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                      Fitur **Speed Limit Warning (Peringatan Batas Kecepatan)** adalah penambahan yang sangat berguna untuk keamanan berkendara! 
-
-Dengan fitur ini, Anda bisa mengatur batas kecepatan maksimum (misalnya: **80 KM/H** di jalan tol atau **50 KM/H** di dalam kota). Ketika kendaraan Anda melebihi batas tersebut:
-1. **Layar Mochi** $\rightarrow$ Otomatis berubah menampilkan ekspresi **Kaget / Panik** secara instan.
-2. **Buzzer Mochi** $\rightarrow$ Mengeluarkan bunyi alarm peringatan (*Beep-Beep-Beep*) berulang kali sampai kecepatan Anda turun kembali di bawah batas limit.
-
----
-
-### Tampilan Fitur Speed Limit di Web Controller (`index.html`)
-
-Aplikasi web di HP Anda akan memiliki **Input / Slider Batas Kecepatan** sehingga Anda bisa mengubah-ubah *speed limit* kapan saja saat berkendara.
-
----
-
-### Kode Lengkap Terupdate
-
-Berikut adalah pembaruan kode untuk **`index.html`** (Web Controller HP) dan **`firmware/mochi.ino`** (ESP32 Mochi).
-
----
-
-#### 1. File `index.html` (Web Controller)
-Salin dan perbarui kode file **`index.html`** di repositori GitHub Anda:
-
-```html
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mochi Dashboard & Controller</title>
+  <title>Mochi Dash HUD Controller</title>
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
-    .card { background: #1e1e1e; border-radius: 15px; padding: 20px; margin: 15px auto; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-    button { background: #00e676; color: #121212; font-weight: bold; border: none; padding: 12px 24px; font-size: 16px; border-radius: 25px; cursor: pointer; transition: 0.2s; }
-    button:active { transform: scale(0.95); }
-    .speed { font-size: 48px; font-weight: bold; color: #00e676; margin: 10px 0; }
-    .status { font-size: 14px; color: #aaa; margin-top: 5px; }
-    input[type="number"] { width: 70px; padding: 8px; border-radius: 8px; border: 1px solid #00e676; background: #222; color: #fff; font-size: 18px; text-align: center; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      color: #38bdf8;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 0.9rem;
+      color: #94a3b8;
+    }
+
+    .card {
+      background-color: #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      margin-bottom: 20px;
+      border: 1px solid #334155;
+    }
+
+    .status-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #ef4444; /* Merah = Terputus */
+      box-shadow: 0 0 8px #ef4444;
+    }
+
+    .dot.connected {
+      background-color: #22c55e; /* Hijau = Terhubung */
+      box-shadow: 0 0 8px #22c55e;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-connect {
+      background-color: #0284c7;
+      color: white;
+    }
+
+    .btn-connect:hover {
+      background-color: #0369a1;
+    }
+
+    .btn-disconnect {
+      background-color: #dc2626;
+      color: white;
+      margin-top: 10px;
+    }
+
+    .dashboard {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .speed-display {
+      font-size: 4rem;
+      font-weight: 800;
+      color: #38bdf8;
+      line-height: 1;
+      margin: 15px 0 5px 0;
+    }
+
+    .speed-unit {
+      font-size: 1rem;
+      color: #64748b;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .info-box {
+      background-color: #0f172a;
+      padding: 12px;
+      border-radius: 10px;
+      text-align: center;
+      border: 1px solid #1e293b;
+    }
+
+    .info-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .info-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .input-group {
+      margin-top: 15px;
+      text-align: left;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background-color: #0f172a;
+      color: #white;
+      font-size: 1rem;
+    }
+
+    .overspeed-alert {
+      background-color: #7f1d1d !important;
+      border-color: #ef4444 !important;
+    }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
 
-  <h1>Mochi Controller</h1>
+  <header>
+    <h1>Mochi Controller</h1>
+    <p class="subtitle">Bluetooth GPS Speedometer & HUD</p>
+  </header>
 
+  <!-- KARTU KONEKSI -->
   <div class="card">
-    <button id="connectBtn" onclick="connectBLE()">Hubungkan ke Mochi</button>
-    <div class="status" id="statusText">Status: Terputus</div>
+    <div class="status-container">
+      <span>Status Perangkat:</span>
+      <div class="status-indicator">
+        <div id="statusDot" class="dot"></div>
+        <span id="statusText">Terputus</span>
+      </div>
+    </div>
+
+    <button id="connectBtn" class="btn btn-connect">Hubungkan ke Mochi</button>
+    <button id="disconnectBtn" class="btn btn-disconnect hidden">Putuskan Koneksi</button>
   </div>
 
-  <div class="card">
-    <div>Kecepatan Real-time</div>
-    <div class="speed" id="speedVal">0 <span style="font-size:20px;">KM/H</span></div>
-  </div>
+  <!-- KARTU DASHBOARD SPEEDOMETER -->
+  <div class="card dashboard" id="dashboardCard">
+    <div class="info-label">Kecepatan Kendaraan</div>
+    <div id="speedDisplay" class="speed-display">0</div>
+    <div class="speed-unit">KM/JAM</div>
 
-  <div class="card">
-    <label for="speedLimitInput"><strong>Set Speed Limit: </strong></label>
-    <input type="number" id="speedLimitInput" value="80" min="20" max="200" onchange="updateLimit()"> <span style="font-size:14px;">KM/H</span>
+    <div class="info-grid">
+      <div class="info-box">
+        <div class="info-label">Jam Terhubung</div>
+        <div id="clockDisplay" class="info-value">00:00</div>
+      </div>
+      <div class="info-box">
+        <div class="info-label">Ekspresi Mochi</div>
+        <div id="moodDisplay" class="info-value">IDLE</div>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label for="speedLimitInput">Batas Kecepatan / Speed Limit (KM/H):</label>
+      <input type="number" id="speedLimitInput" value="80" min="10" max="200">
+    </div>
   </div>
 
   <script>
+    // --- KONFIGURASI BLE ---
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-    let bluetoothDevice;
-    let mochiCharacteristic;
+    let bleDevice = null;
+    let bleCharacteristic = null;
+    let watchId = null;
+
     let currentSpeed = 0;
     let speedLimit = 80;
 
-    function updateLimit() {
-      speedLimit = parseInt(document.getElementById('speedLimitInput').value) || 80;
-    }
+    // --- ELEMENT REFRESH ---
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const speedDisplay = document.getElementById('speedDisplay');
+    const clockDisplay = document.getElementById('clockDisplay');
+    const moodDisplay = document.getElementById('moodDisplay');
+    const speedLimitInput = document.getElementById('speedLimitInput');
+    const dashboardCard = document.getElementById('dashboardCard');
 
-    async function connectBLE() {
+    // --- UPDATE EVENT HANDLERS ---
+    speedLimitInput.addEventListener('change', (e) => {
+      speedLimit = parseInt(e.target.value) || 80;
+    });
+
+    connectBtn.addEventListener('click', async () => {
       try {
-        document.getElementById('statusText').innerText = "Mencari Mochi...";
-        bluetoothDevice = await navigator.bluetooth.requestDevice({
+        statusText.innerText = "Mencari Mochi...";
+        bleDevice = await navigator.bluetooth.requestDevice({
           filters: [{ name: 'DASAI_MOCHI' }],
           optionalServices: [SERVICE_UUID]
         });
 
-        const server = await bluetoothDevice.gatt.connect();
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+        const server = await bleDevice.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
-        mochiCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-        document.getElementById('statusText').innerText = "Status: Terhubung!";
-        document.getElementById('connectBtn').style.background = "#ff5252";
-        document.getElementById('connectBtn').innerText = "Terhubung";
+        // Update UI Koneksi
+        statusDot.classList.add('connected');
+        statusText.innerText = "Terhubung";
+        connectBtn.classList.add('hidden');
+        disconnectBtn.classList.remove('hidden');
 
-        startGPS();
+        // Jalankan GPS & Timer Pengiriman Data
+        startGPSWatch();
         setInterval(sendDataToMochi, 1000);
 
       } catch (error) {
-        console.error(error);
-        document.getElementById('statusText').innerText = "Koneksi Gagal / Dibatalkan";
+        console.error("Gagal terhubung:", error);
+        statusText.innerText = "Gagal Terhubung";
+      }
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+    });
+
+    function onDisconnected() {
+      statusDot.classList.remove('connected');
+      statusText.innerText = "Terputus";
+      connectBtn.classList.remove('hidden');
+      disconnectBtn.classList.add('hidden');
+
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
       }
     }
 
-    function startGPS() {
+    // --- FUNGSI GPS & DATA ---
+    function startGPSWatch() {
       if ("geolocation" in navigator) {
-        navigator.geolocation.watchPosition(
+        watchId = navigator.geolocation.watchPosition(
           (position) => {
-            let speedMps = position.coords.speed; // m/s
-            if (speedMps === null || isNaN(speedMps)) {
-              currentSpeed = 0;
+            let speedMps = position.coords.speed;
+            if (speedMps !== null && speedMps > 0) {
+              currentSpeed = Math.round(speedMps * 3.6); // M/s ke KM/H
             } else {
-              currentSpeed = Math.round(speedMps * 3.6); // Convert m/s -> KM/H
+              currentSpeed = 0;
             }
-            document.getElementById('speedVal').innerText = currentSpeed + " KM/H";
+            updateUI();
           },
-          (error) => { console.error(error); },
-          { enableHighAccuracy: true }
+          (error) => {
+            console.warn("GPS Error:", error.message);
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 5000
+          }
         );
       }
     }
 
-    async function sendDataToMochi() {
-      if (!mochiCharacteristic) return;
+    function sendDataToMochi() {
+      if (!bleCharacteristic) return;
 
-      let now = new Date();
-      let hours = String(now.getHours()).padStart(2, '0');
-      let minutes = String(now.getMinutes()).padStart(2, '0');
-      let timeStr = `${hours}:${minutes}`;
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const timeStr = `${hours}:${minutes}`;
 
       let mood = "IDLE";
       if (currentSpeed > speedLimit) {
         mood = "OVERSPEED";
-      } else if (currentSpeed > 30) {
-        mood = "DRIVING";
       }
 
-      // Payload format: SPEED|MOOD|TIME|LIMIT
-      let payload = `${currentSpeed}|${mood}|${timeStr}|${speedLimit}`;
+      // Format Paket Data: Kecepatan|Mood|Jam|SpeedLimit
+      const payload = `${currentSpeed}|${mood}|${timeStr}|${speedLimit}`;
 
-      try {
-        let encoder = new TextEncoder();
-        await mochiCharacteristic.writeValue(encoder.encode(payload));
-      } catch (err) {
-        console.error("Gagal kirim data:", err);
+      const encoder = new TextEncoder();
+      bleCharacteristic.writeValue(encoder.encode(payload))
+        .catch(err => console.error("Gagal kirim data:", err));
+
+      clockDisplay.innerText = timeStr;
+      moodDisplay.innerText = mood;
+    }
+
+    function updateUI() {
+      speedDisplay.innerText = currentSpeed;
+
+      if (currentSpeed > speedLimit) {
+        dashboardCard.classList.add('overspeed-alert');
+      } else {
+        dashboardCard.classList.remove('overspeed-alert');
       }
     }
   </script>
