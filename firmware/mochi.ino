@@ -7,7 +7,7 @@
 #include <BLE2902.h>
 
 /*
-  MOCHI v2
+  MOCHI
   - BLE phone -> ESP32
   - OLED face with richer non-blocking animations
   - External digital touch sensor support (TTP223 or similar)
