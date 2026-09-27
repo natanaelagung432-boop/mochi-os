@@ -49,7 +49,7 @@
       border: 1px solid #334155;
     }
 
-    /* --- SIMULATOR LAYAR MOCHI (OLED) --- */
+    /* --- SIMULATOR LAYAR MOCHI (OLED TANPA TEKS) --- */
     .mochi-screen-container {
       background-color: #000000;
       border: 4px solid #334155;
@@ -59,19 +59,26 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 140px;
+      min-height: 150px;
       position: relative;
       overflow: hidden;
       box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.05);
       margin-bottom: 15px;
     }
 
+    /* Wajah Mochi (Mata & Mulut) */
     .mochi-face {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .eyes-container {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      width: 140px;
-      height: 50px;
+      width: 130px;
     }
 
     .eye {
@@ -89,36 +96,57 @@
       margin-top: 17px;
     }
 
-    /* Ekspresi Kaget / Overspeed */
+    /* Mata Kaget / Overspeed */
     .eye.shocked {
       width: 36px;
       height: 36px;
       border-radius: 50%;
       background-color: #ef4444;
       box-shadow: 0 0 15px #ef4444;
-      animation: pulseShock 0.4s infinite alternate;
+      animation: pulseShock 0.3s infinite alternate;
     }
 
-    /* Ekspresi Senang / Happy */
+    /* Mata Senang / Happy */
     .eye.happy {
-      height: 12px;
-      border-radius: 12px 12px 0 0;
+      height: 14px;
+      border-radius: 14px 14px 0 0;
       background-color: #38bdf8;
       box-shadow: 0 0 10px #38bdf8;
+    }
+
+    /* DESAIN MULUT EKSPRESIF */
+    .mouth {
+      width: 16px;
+      height: 6px;
+      background-color: #ffffff;
+      border-radius: 3px;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+    }
+
+    /* Mulut Happy (Senyum) */
+    .mouth.happy {
+      width: 24px;
+      height: 10px;
+      background-color: transparent;
+      border-bottom: 4px solid #38bdf8;
+      border-radius: 0 0 12px 12px;
+      box-shadow: none;
+    }
+
+    /* Mulut Kaget (Membuka O) */
+    .mouth.shocked {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background-color: #ef4444;
+      box-shadow: 0 0 10px #ef4444;
+      animation: pulseShock 0.3s infinite alternate;
     }
 
     @keyframes pulseShock {
       0% { transform: scale(1); }
       100% { transform: scale(1.15); }
-    }
-
-    .screen-text {
-      color: #64748b;
-      font-size: 0.75rem;
-      margin-top: 12px;
-      letter-spacing: 1px;
-      font-weight: 600;
-      text-transform: uppercase;
     }
 
     /* --- STATUS & KONTROL --- */
@@ -281,14 +309,16 @@
     <p class="subtitle">Virtual OLED & BLE HUD</p>
   </header>
 
-  <!-- KARTU MOCHI VIRTUAL OLED SCREEN -->
+  <!-- KARTU MOCHI VIRTUAL OLED SCREEN (TANPA TEKS) -->
   <div class="card">
     <div class="mochi-screen-container" id="screenBox">
       <div class="mochi-face">
-        <div class="eye" id="leftEye"></div>
-        <div class="eye" id="rightEye"></div>
+        <div class="eyes-container">
+          <div class="eye" id="leftEye"></div>
+          <div class="eye" id="rightEye"></div>
+        </div>
+        <div class="mouth" id="mochiMouth"></div>
       </div>
-      <div class="screen-text" id="screenStatus">Mochi Idle</div>
     </div>
 
     <!-- TESTER EKSPRESI -->
@@ -360,30 +390,29 @@
 
     const leftEye = document.getElementById('leftEye');
     const rightEye = document.getElementById('rightEye');
-    const screenStatus = document.getElementById('screenStatus');
+    const mochiMouth = document.getElementById('mochiMouth');
     const screenBox = document.getElementById('screenBox');
 
-    // --- LOGIKA ANIMASI WAJAH MOCHI ---
+    // --- LOGIKA ANIMASI WAJAH MOCHI (MATA & MULUT) ---
     function setMood(mood) {
       activeMood = mood;
       moodDisplay.innerText = mood;
 
-      // Reset Kelas Mata
+      // Reset Kelas Wajah
       leftEye.className = "eye";
       rightEye.className = "eye";
+      mochiMouth.className = "mouth";
       screenBox.classList.remove('overspeed-alert');
 
       if (mood === "OVERSPEED") {
         leftEye.classList.add('shocked');
         rightEye.classList.add('shocked');
-        screenStatus.innerText = "! OVER SPEED !";
+        mochiMouth.classList.add('shocked');
         screenBox.classList.add('overspeed-alert');
       } else if (mood === "HAPPY") {
         leftEye.classList.add('happy');
         rightEye.classList.add('happy');
-        screenStatus.innerText = "Mochi Happy";
-      } else {
-        screenStatus.innerText = "Mochi Riding";
+        mochiMouth.classList.add('happy');
       }
     }
 
