@@ -117,13 +117,11 @@
       box-shadow: 0 0 12px var(--primary);
     }
 
-    /* Mochi Expressions Mechanics */
     .eye.look-left { transform: translateX(-15px); }
     .eye.look-right { transform: translateX(15px); }
     .eye.wink-left { transform: scaleY(0.1); }
     .eye.sleepy { transform: scaleY(0.3) translateY(10px); }
     
-    /* Happy Level 1 */
     .eye.happy {
       height: 25px;
       border-radius: 25px 25px 0 0;
@@ -133,7 +131,6 @@
       box-shadow: none;
     }
 
-    /* Happy Level 2 - Heart Eyes */
     .eye.heart {
       background: transparent;
       box-shadow: none;
@@ -159,7 +156,6 @@
       transform-origin: 100% 100%;
     }
 
-    /* Happy Level 3 - Sparkle & Wiggle */
     .eye.sparkle {
       background: #ff007f;
       clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
@@ -177,7 +173,6 @@
       100% { transform: translateY(-8px) rotate(3deg); }
     }
 
-    /* Overspeed Panic */
     .mochi-card.panic {
       border-color: var(--danger);
       animation: shake 0.15s infinite;
@@ -196,7 +191,6 @@
       100% { transform: translate(2px, -2px); }
     }
 
-    /* MOUTH */
     .mouth {
       position: absolute;
       bottom: 15px;
@@ -211,7 +205,6 @@
     .mouth.whistle { width: 12px; height: 12px; border: 3px solid var(--primary); border-radius: 50%; transform: translateX(10px); }
     .mouth.panic-mouth { width: 30px; height: 25px; border: 4px solid var(--danger); border-radius: 50%; background: rgba(255, 75, 75, 0.2); }
 
-    /* MAPS OLED ARROWS */
     .nav-arrow {
       font-size: 3rem;
       color: var(--primary);
@@ -225,7 +218,6 @@
       to { opacity: 1; }
     }
 
-    /* CONTROLS & TABS */
     .card {
       background: var(--card-bg);
       border-radius: 16px;
@@ -283,7 +275,6 @@
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 
-    /* SPEEDOMETER HUD */
     .hud-display {
       text-align: center;
       padding: 15px;
@@ -318,13 +309,13 @@
       accent-color: var(--primary);
     }
 
-    /* INFO FOOTER */
     .info-bar {
       display: flex;
       justify-content: space-between;
       font-size: 0.8rem;
       color: var(--text-dim);
       padding: 0 5px;
+      word-break: break-all;
     }
   </style>
 </head>
@@ -354,13 +345,13 @@
     <!-- MAIN NAVIGATION TABS -->
     <div class="card">
       <div class="tab-group">
-        <button class="tab-btn active" onclick="switchMode('NORMAL')">Normal</button>
-        <button class="tab-btn" onclick="switchMode('HAPPY')">Senang</button>
-        <button class="tab-btn" onclick="switchMode('RIDING')">Riding</button>
-        <button class="tab-btn" onclick="switchMode('MAPS')">Maps Mode</button>
+        <button class="tab-btn active" onclick="switchMode('NORMAL', event)">Normal</button>
+        <button class="tab-btn" onclick="switchMode('HAPPY', event)">Senang</button>
+        <button class="tab-btn" onclick="switchMode('RIDING', event)">Riding</button>
+        <button class="tab-btn" onclick="switchMode('MAPS', event)">Maps Mode</button>
       </div>
 
-      <!-- PANEL 1: NORMAL MODE (GABUT 4 DETIK) -->
+      <!-- PANEL 1: NORMAL MODE -->
       <div class="panel active" id="panelNORMAL">
         <p style="font-size: 0.85rem; color: var(--text-dim);">Mode gabut otomatis berganti ekspresi tiap 4 detik (kedip, melirik, menguap, siul, wink).</p>
         <div class="info-bar">
@@ -369,7 +360,7 @@
         </div>
       </div>
 
-      <!-- PANEL 2: HAPPY MODE (3 LEVEL TOUCH & HOLD) -->
+      <!-- PANEL 2: HAPPY MODE -->
       <div class="panel" id="panelHAPPY">
         <p style="font-size: 0.85rem; color: var(--text-dim);">Simulasi sentuhan/hold pada bodi Mochi:</p>
         <div class="grid-3">
@@ -379,7 +370,7 @@
         </div>
       </div>
 
-      <!-- PANEL 3: RIDING MODE (HUD & SPEED) -->
+      <!-- PANEL 3: RIDING MODE -->
       <div class="panel" id="panelRIDING">
         <div class="hud-display">
           <div class="speed-value" id="speedDisplay">0</div>
@@ -405,7 +396,7 @@
         <button class="btn btn-outline" style="margin-top:5px;" onclick="toggleGPS()" id="btnGPS">Aktifkan GPS HP</button>
       </div>
 
-      <!-- PANEL 4: MAPS MODE (NAVIGATION CONTROL) -->
+      <!-- PANEL 4: MAPS MODE -->
       <div class="panel" id="panelMAPS">
         <p style="font-size: 0.85rem; color: var(--text-dim);">Petunjuk arah navigasi untuk layar Mochi:</p>
         <div class="grid-2">
@@ -428,7 +419,7 @@
     <!-- FOOTER INFO -->
     <div class="info-bar">
       <span>Jam: <b id="clockText">00:00</b></span>
-      <span>Payload: <b id="payloadText">-</b></span>
+      <span>Payload: <b id="payloadText" style="color:var(--primary)">-</b></span>
     </div>
 
   </div>
@@ -436,14 +427,16 @@
   <script>
     // --- GLOBAL VARIABLES ---
     let currentMode = 'NORMAL';
-    let bleDevice, bleServer, rxCharacteristic;
+    let bleDevice = null;
+    let bleServer = null;
+    let rxCharacteristic = null;
     let idleTimer = null;
     let currentSpeed = 0;
     let speedLimit = 80;
     let isGPSActive = false;
     let watchId = null;
 
-    // UUID Bluetooth ESP32 (Atur Sesuai ESP32 Anda)
+    // BLE UUID (Harus persis sama dengan kode C++ ESP32)
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
@@ -462,37 +455,105 @@
       startIdleLoop();
     };
 
-    // --- CLOCK ---
+    // --- CLOCK ENGINE ---
     function startClock() {
-      setInterval(() => {
+      const updateClock = () => {
         const now = new Date();
-        const timeStr = now.toTimeString().split(' ')[0].substring(0, 5);
-        document.getElementById('clockText').innerText = timeStr;
-      }, 1000);
+        const hrs = String(now.getHours()).padStart(2, '0');
+        const mins = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('clockText').innerText = `${hrs}:${mins}`;
+      };
+      updateClock();
+      setInterval(updateClock, 1000);
+    }
+
+    // --- BLE ENGINE ---
+    async function connectBluetooth() {
+      try {
+        console.log("Mencari perangkat BLE...");
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'MOCHI_HUD' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        bleServer = await bleDevice.gatt.connect();
+        const service = await bleServer.getPrimaryService(SERVICE_UUID);
+        rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('statusText').innerText = 'Terhubung';
+        
+        sendBluetoothPayload();
+      } catch (error) {
+        console.error("Gagal koneksi BLE:", error);
+        alert("Koneksi BLE Gagal: " + error);
+      }
+    }
+
+    function disconnectBluetooth() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+    }
+
+    function onDisconnected() {
+      document.getElementById('statusDot').classList.remove('connected');
+      document.getElementById('statusText').innerText = 'Terputus';
+      rxCharacteristic = null;
+    }
+
+    // --- PAYLOAD BUILDER & TRANSMITTER ---
+    function sendBluetoothPayload(customDetail = "") {
+      const payload = buildPayloadString(customDetail);
+      document.getElementById('payloadText').innerText = payload;
+
+      if (!rxCharacteristic) return;
+
+      const encoder = new TextEncoder();
+      rxCharacteristic.writeValue(encoder.encode(payload))
+        .catch(err => console.error("Gagal Mengirim Payload:", err));
+    }
+
+    function buildPayloadString(customDetail = "") {
+      const clock = document.getElementById('clockText').innerText || "08:45";
+      const speed = currentSpeed.toString();
+      let mode = currentMode;
+      let detail = customDetail;
+
+      if (!detail) {
+        if (mode === 'NORMAL') detail = 'NORMAL';
+        else if (mode === 'HAPPY') detail = 'HAPPY';
+        else if (mode === 'RIDING') detail = 'CRUISING';
+      }
+
+      // Jika mode MAPS, susun CSV sesuai parseMapsData pada ESP32:
+      // DIRECTION,DISTANCE,STREET,ETA,TOTALDIST,NEXTDIR,NEXTDIST
+      if (mode === 'MAPS') {
+        const navDir = customDetail || "STRAIGHT";
+        detail = `${navDir},150m,Jl. Pemuda,10m,12.4km,STRAIGHT,500m`;
+      }
+
+      // Format akhir ESP32: SPEED|MODE|DETAIL|CLOCK
+      return `${speed}|${mode}|${detail}|${clock}`;
     }
 
     // --- MODE SWITCHING ---
-    function switchMode(mode) {
+    function switchMode(mode, evt) {
       currentMode = mode;
       
-      // Update Tabs UI
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
       
-      event.target.classList.add('active');
+      if (evt && evt.target) evt.target.classList.add('active');
       document.getElementById(`panel${mode}`).classList.add('active');
 
       resetMochiVisual();
 
-      if (mode === 'NORMAL') {
-        startIdleLoop();
-      } else {
-        stopIdleLoop();
-      }
+      if (mode === 'NORMAL') startIdleLoop();
+      else stopIdleLoop();
 
-      if (mode === 'RIDING') {
-        evaluateRidingState();
-      }
+      if (mode === 'RIDING') evaluateRidingState();
 
       sendBluetoothPayload();
     }
@@ -507,7 +568,7 @@
       arrowRight.style.display = 'none';
     }
 
-    // --- 1. MODE NORMAL (GABUT 4 DETIK) ---
+    // --- MODE NORMAL ---
     function startIdleLoop() {
       stopIdleLoop();
       runRandomIdleAnimation();
@@ -525,56 +586,56 @@
       const rand = Math.floor(Math.random() * 5);
 
       switch (rand) {
-        case 0: // Melirik Kanan
+        case 0:
           eyeLeft.classList.add('look-right');
           eyeRight.classList.add('look-right');
           document.getElementById('idleStateText').innerText = "Melirik Kanan";
           break;
-        case 1: // Melirik Kiri
+        case 1:
           eyeLeft.classList.add('look-left');
           eyeRight.classList.add('look-left');
           document.getElementById('idleStateText').innerText = "Melirik Kiri";
           break;
-        case 2: // Mengantuk
+        case 2:
           eyeLeft.classList.add('sleepy');
           eyeRight.classList.add('sleepy');
           mochiMouth.classList.add('open');
           document.getElementById('idleStateText').innerText = "Mengantuk/Menguap";
           break;
-        case 3: // Siul
+        case 3:
           mochiMouth.classList.add('whistle');
           document.getElementById('idleStateText').innerText = "Bersenandung/Siul";
           break;
-        case 4: // Wink
+        case 4:
           eyeLeft.classList.add('wink-left');
           document.getElementById('idleStateText').innerText = "Wink / Berkedip";
           break;
       }
-      sendBluetoothPayload();
+      sendBluetoothPayload('NORMAL');
     }
 
-    // --- 2. MODE SENANG (3 LEVEL TOUCH HOLD) ---
+    // --- MODE HAPPY ---
     function triggerHappy(level) {
       resetMochiVisual();
 
-      if (level === 1) { // Tap Singkat
+      if (level === 1) {
         eyeLeft.classList.add('happy');
         eyeRight.classList.add('happy');
-      } else if (level === 2) { // Hold 2s - Heart Eyes
+      } else if (level === 2) {
         eyeLeft.classList.add('heart');
         eyeRight.classList.add('heart');
         mochiMouth.classList.add('open');
-      } else if (level === 3) { // Hold 5s - Sparkle & Wiggle
+      } else if (level === 3) {
         eyeLeft.classList.add('sparkle');
         eyeRight.classList.add('sparkle');
         mochiMouth.classList.add('open');
         mochiScreen.classList.add('wiggle');
       }
 
-      sendBluetoothPayload(`HAPPY_L${level}`);
+      sendBluetoothPayload('HAPPY');
     }
 
-    // --- 3. RIDING MODE & SPEEDOMETER ---
+    // --- MODE RIDING & SPEEDOMETER ---
     function updateSimulatedSpeed(val) {
       currentSpeed = parseInt(val);
       document.getElementById('simSpeedVal').innerText = `${currentSpeed} km/jam`;
@@ -592,113 +653,13 @@
       resetMochiVisual();
       const ratio = currentSpeed / speedLimit;
 
-      if (ratio > 1.0) { // Overspeed Panic (>100%)
+      if (ratio > 1.0) { // Panic (Kecepatan > Speed Limit)
         mochiCard.classList.add('panic');
         eyeLeft.classList.add('panic-eye');
         eyeRight.classList.add('panic-eye');
         mochiMouth.classList.add('panic-mouth');
         sendBluetoothPayload('RIDE_PANIC');
-      } else if (ratio > 0.5) { // Happy Ride (51 - 95%)
+      } else if (ratio > 0.5) {
         eyeLeft.classList.add('happy');
         eyeRight.classList.add('happy');
-        mochiMouth.classList.add('open');
-        sendBluetoothPayload('RIDE_HAPPY');
-      } else { // Cruising Santai (0 - 50%)
-        mochiMouth.classList.add('whistle');
-        sendBluetoothPayload('RIDE_SANTAI');
-      }
-    }
-
-    function toggleGPS() {
-      if (!isGPSActive) {
-        if ("geolocation" in navigator) {
-          watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-              const speedMs = pos.coords.speed || 0;
-              currentSpeed = Math.round(speedMs * 3.6); // Convert m/s to km/h
-              document.getElementById('speedDisplay').innerText = currentSpeed;
-              document.getElementById('simSpeedSlider').value = currentSpeed;
-              document.getElementById('simSpeedVal').innerText = `${currentSpeed} km/jam`;
-              if (currentMode === 'RIDING') evaluateRidingState();
-            },
-            (err) => alert("Gagal mengambil lokasi GPS: " + err.message),
-            { enableHighAccuracy: true }
-          );
-          isGPSActive = true;
-          document.getElementById('btnGPS').innerText = "Matikan GPS HP";
-          document.getElementById('btnGPS').classList.replace('btn-outline', 'btn-danger');
-        }
-      } else {
-        navigator.geolocation.clearWatch(watchId);
-        isGPSActive = false;
-        document.getElementById('btnGPS').innerText = "Aktifkan GPS HP";
-        document.getElementById('btnGPS').classList.replace('btn-danger', 'btn-outline');
-      }
-    }
-
-    // --- 4. MAPS MODE (NAVIGATION CONTROL) ---
-    function triggerMaps(direction) {
-      resetMochiVisual();
-
-      if (direction === 'LEFT') {
-        arrowLeft.style.display = 'block';
-        eyeLeft.classList.add('look-left');
-        eyeRight.classList.add('look-left');
-      } else if (direction === 'RIGHT') {
-        arrowRight.style.display = 'block';
-        eyeLeft.classList.add('look-right');
-        eyeRight.classList.add('look-right');
-      } else if (direction === 'STRAIGHT') {
-        mochiMouth.classList.add('open');
-      } else if (direction === 'ARRIVED') {
-        triggerHappy(3); // Selebrasi
-        return;
-      }
-
-      sendBluetoothPayload(`MAPS_${direction}`);
-    }
-
-    // --- BLUETOOTH BLE COMMUNICATION ---
-    async function connectBluetooth() {
-      try {
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: 'Mochi' }],
-          optionalServices: [SERVICE_UUID]
-        });
-
-        bleServer = await bleDevice.gatt.connect();
-        const service = await bleServer.getPrimaryService(SERVICE_UUID);
-        rxCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-
-        document.getElementById('statusDot').classList.add('connected');
-        document.getElementById('statusText').innerText = "Terhubung";
-        sendBluetoothPayload();
-      } catch (err) {
-        alert("Koneksi Bluetooth Gagal: " + err);
-      }
-    }
-
-    function disconnectBluetooth() {
-      if (bleDevice && bleDevice.gatt.connected) {
-        bleDevice.gatt.disconnect();
-      }
-      document.getElementById('statusDot').classList.remove('connected');
-      document.getElementById('statusText').innerText = "Terputus";
-    }
-
-    function sendBluetoothPayload(customDetail = "") {
-      const timeStr = document.getElementById('clockText').innerText;
-      let detail = customDetail || document.getElementById('idleStateText').innerText;
-      
-      // Payload Format: Kecepatan | Mode | Detail/Arah | Jam
-      const payload = `${currentSpeed}|${currentMode}|${detail}|${timeStr}`;
-      document.getElementById('payloadText').innerText = payload;
-
-      if (rxCharacteristic && bleDevice.gatt.connected) {
-        const encoder = new TextEncoder();
-        rxCharacteristic.writeValue(encoder.encode(payload));
-      }
-    }
-  </script>
-</body>
-</html>
+        m
