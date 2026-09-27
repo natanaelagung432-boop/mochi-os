@@ -7,8 +7,6 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-#include "animasi.h"
-
 // --- KONFIGURASI OLED ---
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -22,26 +20,30 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
-// --- STATE SISTEM & INTERAKSI ---
+// --- STATE SISTEM ---
 bool deviceConnected = false;
 String currentSpeed  = "0";
-String currentMode   = "IDLE"; // IDLE, MAPS, RIDING, HAPPY, ANGRY, SLEEP, DIZZY
+String currentMode   = "IDLE"; // Mode: IDLE, MAPS, RIDING, HAPPY, ANGRY, SLEEP, SURPRISED, CONFUSED
 String currentDetail = "NORMAL";
 String currentClock  = "08:45";
 
-// Status Navigasi Maps
+// --- STATE NAVIGASI MAPS ---
 String navDirection = "LEFT";
 String navDistance  = "150m";
 String navStreet    = "Jl. Pemuda";
 String navETA       = "10m";
 String navTotalDist = "12.4km";
 
-// Variable Animasi Wajah Organik (Piksel Dinamis)
-int currentFrameIndex = 0;
-unsigned long lastEyeBlink = 0;
-bool isBlinking = false;
-int eyeXOffset = 0; // Efek melirik (-6 sampai 6)
-int eyeYOffset = 0;
+// --- STATE ANIMASI ORGANIK MOCHI ---
+unsigned long lastBlinkTime    = 0;
+unsigned long lastExpressionTime = 0;
+bool isBlinking                = false;
+int eyeXOffset                 = 0; 
+int eyeYOffset                 = 0; 
+
+// Enum Ekspresi Idle Dinamis
+enum IdleExpression { EXPR_NORMAL, EXPR_SURPRISED, EXPR_CONFUSED, EXPR_YAWN };
+IdleExpression currentIdleExpr = EXPR_NORMAL;
 
 // --- PARSING DATA MAPS ---
 void parseMapsData(String data) {
@@ -79,12 +81,12 @@ void parseMapsData(String data) {
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       deviceConnected = true;
-      currentMode = "HAPPY"; // Mochi gembira saat HP terhubung!
+      currentMode = "HAPPY"; 
     };
 
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
-      currentMode = "SLEEP"; // Mochi tertidur jika terputus
+      currentMode = "SLEEP"; 
       BLEDevice::startAdvertising();
     }
 };
@@ -116,7 +118,7 @@ class MyCallbacks: public BLECharacteristicCallbacks {
     }
 };
 
-// --- RENDER IKON NAVIGASI HUD ---
+// --- RENDER IKON NAVIGASI HUD (Area 50x50px) ---
 void drawNavIcon(String dir) {
   if (dir == "LEFT") {
     display.fillTriangle(5, 36, 25, 20, 25, 52, WHITE);
@@ -127,9 +129,11 @@ void drawNavIcon(String dir) {
   } else if (dir == "SLIGHT_LEFT") {
     display.fillTriangle(5, 22, 22, 17, 12, 34, WHITE);
     display.drawLine(17, 26, 35, 48, WHITE);
+    display.drawLine(18, 27, 36, 49, WHITE);
   } else if (dir == "SLIGHT_RIGHT") {
     display.fillTriangle(45, 22, 28, 17, 38, 34, WHITE);
     display.drawLine(33, 26, 15, 48, WHITE);
+    display.drawLine(32, 27, 14, 49, WHITE);
   } else if (dir == "UTURN") {
     display.drawCircle(25, 28, 14, WHITE);
     display.fillRect(11, 28, 6, 20, WHITE);
@@ -146,111 +150,166 @@ void renderMapsHUD() {
   display.setTextSize(1);
   display.setTextColor(WHITE);
 
+  // 1. Header (Jam, Total Jarak, Status BLE)
   display.setCursor(0, 0);
   display.print(currentClock);
 
   if (navTotalDist.length() > 0) {
-    display.setCursor(60, 0);
+    display.setCursor(55, 0);
     display.print(navTotalDist);
   }
 
-  display.setCursor(100, 0);
+  display.setCursor(98, 0);
   display.print(deviceConnected ? "[BLE]" : "[OFF]");
 
+  // Garis Pemisah Horizontal Header
   display.drawFastHLine(0, 10, 128, WHITE);
+
+  // 2. Ikon Navigasi Sisi Kiri
   drawNavIcon(navDirection);
+
+  // Garis Pemisah Vertikal (x = 51)
   display.drawFastVLine(51, 11, 53, WHITE);
 
+  // 3. Teks Informasi Navigasi Sisi Kanan
+  // Angka Jarak Belok (Teks Besar & Tebal)
   display.setTextSize(2);
-  display.setCursor(56, 16);
+  display.setCursor(56, 15);
   display.print(navDistance);
 
+  // Nama Jalan (Auto Truncate jika panjang)
   display.setTextSize(1);
-  display.setCursor(56, 36);
+  display.setCursor(56, 35);
   String shortStreet = navStreet;
   if (shortStreet.length() > 11) {
     shortStreet = shortStreet.substring(0, 10) + ".";
   }
   display.print(shortStreet);
 
-  display.setCursor(56, 52);
+  // ETA / Estimasi Tiba
+  display.setCursor(56, 51);
   display.print("ETA: " + navETA);
 }
 
-// --- LOGIKA WAJAH MOCHI INTERAKTIF & HIDUP ---
+// --- ENGINE EKSPRESI HIDUP MOCHI ---
 void drawLivingMochi() {
-  // Update efek berkedip otomatis
-  if (millis() - lastEyeBlink > 3000) {
+  unsigned long now = millis();
+
+  // 1. TIMING BERKEDIP & MELIRIK OTOMATIS
+  if (now - lastBlinkTime > 3500) {
     isBlinking = true;
-    if (millis() - lastEyeBlink > 3150) {
+    if (now - lastBlinkTime > 3650) {
       isBlinking = false;
-      lastEyeBlink = millis();
-      // Acak arah melirik mata setiap selesai berkedip
-      eyeXOffset = random(-4, 5); 
+      lastBlinkTime = now;
+      eyeXOffset = random(-5, 6); // Melirik acak
+      eyeYOffset = random(-2, 3);
     }
   }
 
-  // 1. MODE ANGRY (Jika Kecepatan Terlalu Tinggi / Overspeed)
-  if (currentMode == "ANGRY" || currentDetail == "RIDE_PANIC") {
-    // Alis Marah / Galak
-    display.drawLine(20, 18, 50, 30, WHITE);
-    display.drawLine(108, 18, 78, 30, WHITE);
-    // Mata Tegas
-    display.fillRoundRect(25, 32, 20, 15, 4, WHITE);
-    display.fillRoundRect(83, 32, 20, 15, 4, WHITE);
-    // Mulut Teriak Segitiga
-    display.fillTriangle(58, 48, 70, 48, 64, 58, WHITE);
+  // 2. STATE MACHINE EKSPRESI IDLE BERBAGAI VARIASI (Tiap 12 detik ganti ekspresi acak)
+  if (now - lastExpressionTime > 12000) {
+    lastExpressionTime = now;
+    int randVal = random(0, 10);
+    if (randVal < 5)       currentIdleExpr = EXPR_NORMAL;
+    else if (randVal < 7)  currentIdleExpr = EXPR_SURPRISED;
+    else if (randVal < 9)  currentIdleExpr = EXPR_CONFUSED;
+    else                   currentIdleExpr = EXPR_YAWN;
+  }
 
-    // Bip Buzzer peringatan
+  // --- RENDER VARIASI EKSPRESI ---
+
+  // A. MODE MARAH / OVERSPEED / PANIC
+  if (currentMode == "ANGRY" || currentDetail == "RIDE_PANIC") {
+    // Alis Tajam Miring
+    display.drawLine(20, 16, 48, 28, WHITE);
+    display.drawLine(108, 16, 80, 28, WHITE);
+    // Mata Tegas Oval
+    display.fillRoundRect(24, 30, 22, 16, 4, WHITE);
+    display.fillRoundRect(82, 30, 22, 16, 4, WHITE);
+    // Mulut Segitiga Teriak
+    display.fillTriangle(58, 46, 70, 46, 64, 56, WHITE);
+
     digitalWrite(BUZZER_PIN, HIGH);
     delay(20);
     digitalWrite(BUZZER_PIN, LOW);
   }
-  
-  // 2. MODE HAPPY (Menyapa saat terhubung BLE)
+
+  // B. MODE SENANG (HAPPY / CONNECTED)
   else if (currentMode == "HAPPY") {
-    // Mata Lengkung Senang ^ ^
-    display.drawCircle(35, 35, 12, WHITE);
-    display.fillRect(20, 35, 30, 15, BLACK); // Potong bawah
-    display.drawCircle(93, 35, 12, WHITE);
-    display.fillRect(78, 35, 30, 15, BLACK);
-    // Mulut Senyum
-    display.drawCircle(64, 45, 8, WHITE);
-    display.fillRect(54, 37, 20, 10, BLACK);
+    // Mata Senyum Lengkung ^ ^
+    display.drawCircle(35, 34, 12, WHITE);
+    display.fillRect(20, 34, 30, 15, BLACK);
+    display.drawCircle(93, 34, 12, WHITE);
+    display.fillRect(78, 34, 30, 15, BLACK);
+    // Mulut Terbuka Senang
+    display.drawCircle(64, 44, 7, WHITE);
+    display.fillRect(54, 36, 20, 9, BLACK);
   }
 
-  // 3. MODE SLEEP (Saat Bluetooth Terputus)
+  // C. MODE SLEEP (DISCONNECTED)
   else if (currentMode == "SLEEP" || !deviceConnected) {
-    // Mata Terpejam u u
-    display.drawLine(25, 38, 45, 38, WHITE);
-    display.drawLine(83, 38, 103, 38, WHITE);
-    // Teks Zzz
+    // Mata Garis Terpejam u u
+    display.fillRect(25, 36, 20, 3, WHITE);
+    display.fillRect(83, 36, 20, 3, WHITE);
+    // Teks Zzz Melayang
     display.setTextSize(1);
-    display.setCursor(110, 15);
-    display.print("z");
-    display.setCursor(116, 8);
-    display.print("Z");
+    display.setCursor(108, 18); display.print("z");
+    display.setCursor(115, 10); display.print("Z");
   }
 
-  // 4. MODE IDLE / NORMAL (Mochi Bernapas, Berkedip & Melirik)
+  // D. EKSPRESI IDLE DINAMIS
   else {
-    if (isBlinking) {
-      // Garis Berkedip
-      display.fillRect(25, 35, 22, 4, WHITE);
-      display.fillRect(81, 35, 22, 4, WHITE);
-    } else {
-      // Mata Bulat Mochi dengan Efek Melirik Dinamis
-      display.fillRoundRect(25 + eyeXOffset, 25, 22, 24, 8, WHITE);
-      display.fillRoundRect(81 + eyeXOffset, 25, 22, 24, 8, WHITE);
-      // Kilatan Cahaya Piksel di Mata (Pupil)
-      display.fillRect(28 + eyeXOffset, 28, 6, 6, BLACK);
-      display.fillRect(84 + eyeXOffset, 28, 6, 6, BLACK);
+    // 1. KAGET / SURPRISED (Mata Bulat Besar)
+    if (currentMode == "SURPRISED" || currentIdleExpr == EXPR_SURPRISED) {
+      display.fillCircle(35, 35, 14, WHITE);
+      display.fillCircle(93, 35, 14, WHITE);
+      display.fillCircle(35, 35, 5, BLACK); // Pupil kecil
+      display.fillCircle(93, 35, 5, BLACK);
+      display.fillCircle(64, 48, 5, WHITE); // Mulut 'O' besar
+      display.fillCircle(64, 48, 2, BLACK);
     }
-    // Mulut Mochi Imut (O-shape / Dot)
-    display.fillCircle(64, 48, 3, WHITE);
+    // 2. BINGUNG / CONFUSED (Mata Asimetris)
+    else if (currentMode == "CONFUSED" || currentIdleExpr == EXPR_CONFUSED) {
+      // Mata Kiri Normal, Mata Kanan Kecil
+      display.fillRoundRect(25, 26, 20, 22, 6, WHITE);
+      display.fillCircle(93, 35, 8, WHITE);
+      // Alis Terangkat Sebelah
+      display.drawLine(25, 20, 45, 18, WHITE);
+      display.drawLine(83, 23, 103, 25, WHITE);
+      // Mulut Miring
+      display.drawLine(58, 48, 70, 45, WHITE);
+    }
+    // 3. MENGUAP / YAWN
+    else if (currentIdleExpr == EXPR_YAWN) {
+      // Mata Meram Sipit
+      display.drawLine(25, 35, 45, 38, WHITE);
+      display.drawLine(83, 38, 103, 35, WHITE);
+      // Mulut Menguap Besar
+      display.fillRoundRect(58, 42, 12, 16, 4, WHITE);
+    }
+    // 4. NORMAL IDLE (Berkedip, Melirik, Bernapas)
+    else {
+      if (isBlinking) {
+        display.fillRect(25, 35, 22, 4, WHITE);
+        display.fillRect(81, 35, 22, 4, WHITE);
+      } else {
+        // Mata Utama Mochi dengan Offset Melirik Dinamis
+        int lx = 25 + eyeXOffset;
+        int rx = 81 + eyeXOffset;
+        int ey = 25 + eyeYOffset;
+
+        display.fillRoundRect(lx, ey, 22, 24, 8, WHITE);
+        display.fillRoundRect(rx, ey, 22, 24, 8, WHITE);
+        // Kilatan Cahaya Piksel Mata
+        display.fillRect(lx + 3, ey + 3, 6, 6, BLACK);
+        display.fillRect(rx + 3, ey + 3, 6, 6, BLACK);
+      }
+      // Mulut Titik Imut
+      display.fillCircle(64, 48, 3, WHITE);
+    }
   }
 
-  // Tampilkan Kecepatan di bagian bawah jika dalam Mode Riding
+  // Tampilan Kecepatan pada Riding Mode
   if (currentMode == "RIDING") {
     display.setTextSize(1);
     display.setCursor(42, 55);
@@ -302,8 +361,10 @@ void loop() {
   display.clearDisplay();
 
   if (currentMode == "MAPS") {
+    // Mode HUD Maps Navigasi
     renderMapsHUD();
   } else {
+    // Mode Ekspresi Wajah Mochi Hidup
     drawLivingMochi();
 
     // Top Header Overlay
