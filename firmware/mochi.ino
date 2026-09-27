@@ -1,16 +1,19 @@
-#include <Arduino.h>
-#include <U8g2lib.h>
+#include <SPI.h>
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-// Include file animasi bitmap
 #include "animasi.h"
 
-// --- KONFIGURASI OLED (U8g2) ---
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+// --- KONFIGURASI OLED ---
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // --- PIN BUZZER ---
 #define BUZZER_PIN 23
@@ -19,24 +22,28 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
-// --- VARIABLE STATE ---
+// --- STATE SISTEM & INTERAKSI ---
 bool deviceConnected = false;
 String currentSpeed  = "0";
-String currentMode   = "MAPS"; // Default diset ke MAPS agar langsung terlihat
-String currentDetail = "LEFT,150m,Jl. Pemuda,10m,12.4km";
+String currentMode   = "IDLE"; // IDLE, MAPS, RIDING, HAPPY, ANGRY, SLEEP, DIZZY
+String currentDetail = "NORMAL";
 String currentClock  = "08:45";
 
-// Variable Navigasi Maps
+// Status Navigasi Maps
 String navDirection = "LEFT";
 String navDistance  = "150m";
 String navStreet    = "Jl. Pemuda";
 String navETA       = "10m";
 String navTotalDist = "12.4km";
 
-// Frame tracker animasi
+// Variable Animasi Wajah Organik (Piksel Dinamis)
 int currentFrameIndex = 0;
+unsigned long lastEyeBlink = 0;
+bool isBlinking = false;
+int eyeXOffset = 0; // Efek melirik (-6 sampai 6)
+int eyeYOffset = 0;
 
-// --- FUNGSI PARSING DATA MAPS ---
+// --- PARSING DATA MAPS ---
 void parseMapsData(String data) {
   data.trim();
   int c1 = data.indexOf(',');
@@ -72,12 +79,12 @@ void parseMapsData(String data) {
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       deviceConnected = true;
-      Serial.println("[BLE] Device Terhubung!");
+      currentMode = "HAPPY"; // Mochi gembira saat HP terhubung!
     };
 
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
-      Serial.println("[BLE] Device Terputus! Re-advertising...");
+      currentMode = "SLEEP"; // Mochi tertidur jika terputus
       BLEDevice::startAdvertising();
     }
 };
@@ -88,10 +95,6 @@ class MyCallbacks: public BLECharacteristicCallbacks {
       rxValue.trim();
 
       if (rxValue.length() > 0) {
-        Serial.print("[BLE Data Masuk]: ");
-        Serial.println(rxValue);
-
-        // Parsing Payload: Kecepatan | Mode | Detail | Jam
         int firstPipe  = rxValue.indexOf('|');
         int secondPipe = rxValue.indexOf('|', firstPipe + 1);
         int thirdPipe  = rxValue.indexOf('|', secondPipe + 1);
@@ -113,98 +116,166 @@ class MyCallbacks: public BLECharacteristicCallbacks {
     }
 };
 
-// --- FUNGSI MENGGAMBAR IKON PANAH NAVIGASI ---
+// --- RENDER IKON NAVIGASI HUD ---
 void drawNavIcon(String dir) {
   if (dir == "LEFT") {
-    u8g2.drawTriangle(5, 36, 25, 20, 25, 52);
-    u8g2.drawBox(25, 31, 20, 10);
-  } 
-  else if (dir == "RIGHT") {
-    u8g2.drawTriangle(45, 36, 25, 20, 25, 52);
-    u8g2.drawBox(5, 31, 20, 10);
-  } 
-  else if (dir == "SLIGHT_LEFT") {
-    u8g2.drawTriangle(5, 22, 22, 17, 12, 34);
-    u8g2.drawLine(17, 26, 35, 48);
-    u8g2.drawLine(18, 27, 36, 49);
-  } 
-  else if (dir == "SLIGHT_RIGHT") {
-    u8g2.drawTriangle(45, 22, 28, 17, 38, 34);
-    u8g2.drawLine(33, 26, 15, 48);
-    u8g2.drawLine(32, 27, 14, 49);
-  } 
-  else if (dir == "UTURN") {
-    u8g2.drawCircle(25, 28, 14, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-    u8g2.drawBox(11, 28, 6, 20);
-    u8g2.drawBox(33, 28, 6, 10);
-    u8g2.drawTriangle(8, 48, 20, 48, 14, 55);
-  } 
-  else { // STRAIGHT / DEFAULT
-    u8g2.drawTriangle(25, 16, 10, 33, 40, 33);
-    u8g2.drawBox(20, 33, 10, 20);
+    display.fillTriangle(5, 36, 25, 20, 25, 52, WHITE);
+    display.fillRect(25, 31, 20, 10, WHITE);
+  } else if (dir == "RIGHT") {
+    display.fillTriangle(45, 36, 25, 20, 25, 52, WHITE);
+    display.fillRect(5, 31, 20, 10, WHITE);
+  } else if (dir == "SLIGHT_LEFT") {
+    display.fillTriangle(5, 22, 22, 17, 12, 34, WHITE);
+    display.drawLine(17, 26, 35, 48, WHITE);
+  } else if (dir == "SLIGHT_RIGHT") {
+    display.fillTriangle(45, 22, 28, 17, 38, 34, WHITE);
+    display.drawLine(33, 26, 15, 48, WHITE);
+  } else if (dir == "UTURN") {
+    display.drawCircle(25, 28, 14, WHITE);
+    display.fillRect(11, 28, 6, 20, WHITE);
+    display.fillRect(33, 28, 6, 10, WHITE);
+    display.fillTriangle(8, 48, 20, 48, 14, 55, WHITE);
+  } else { // STRAIGHT
+    display.fillTriangle(25, 16, 10, 33, 40, 33, WHITE);
+    display.fillRect(20, 33, 10, 20, WHITE);
   }
 }
 
-// --- FUNGSI RENDER TAMPILAN MAPS HUD ---
+// --- RENDER LAYAR MAPS HUD ---
 void renderMapsHUD() {
-  // 1. Header (Info Jam, Total Jarak, dan Status BLE)
-  u8g2.setFont(u8g2_font_micro_tr);
-  u8g2.drawStr(0, 8, currentClock.c_str());
-  
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+
+  display.setCursor(0, 0);
+  display.print(currentClock);
+
   if (navTotalDist.length() > 0) {
-    u8g2.drawStr(60, 8, navTotalDist.c_str());
-  }
-  
-  if (deviceConnected) {
-    u8g2.drawStr(104, 8, "[BLE]");
-  } else {
-    u8g2.drawStr(104, 8, "[OFF]");
+    display.setCursor(60, 0);
+    display.print(navTotalDist);
   }
 
-  // Garis Pemisah Header (Horizontal)
-  u8g2.drawHLine(0, 10, 128);
+  display.setCursor(100, 0);
+  display.print(deviceConnected ? "[BLE]" : "[OFF]");
 
-  // 2. Ikon Arah Utama (Area Kiri: x=0..50)
+  display.drawFastHLine(0, 10, 128, WHITE);
   drawNavIcon(navDirection);
+  display.drawFastVLine(51, 11, 53, WHITE);
 
-  // Garis Pemisah Vertikal
-  u8g2.drawVLine(51, 11, 53);
+  display.setTextSize(2);
+  display.setCursor(56, 16);
+  display.print(navDistance);
 
-  // 3. Teks Informasi Navigasi (Area Kanan: x=54..128)
-  // Jarak ke Belokan
-  u8g2.setFont(u8g2_font_7x14B_tr);
-  u8g2.drawStr(55, 26, navDistance.c_str());
-
-  // Nama Jalan
-  u8g2.setFont(u8g2_font_6x10_tr);
+  display.setTextSize(1);
+  display.setCursor(56, 36);
   String shortStreet = navStreet;
   if (shortStreet.length() > 11) {
     shortStreet = shortStreet.substring(0, 10) + ".";
   }
-  u8g2.drawStr(55, 41, shortStreet.c_str());
+  display.print(shortStreet);
 
-  // Estimasi Tiba (ETA)
-  u8g2.setFont(u8g2_font_micro_tr);
-  String etaText = "ETA: " + navETA;
-  u8g2.drawStr(55, 58, etaText.c_str());
+  display.setCursor(56, 52);
+  display.print("ETA: " + navETA);
+}
+
+// --- LOGIKA WAJAH MOCHI INTERAKTIF & HIDUP ---
+void drawLivingMochi() {
+  // Update efek berkedip otomatis
+  if (millis() - lastEyeBlink > 3000) {
+    isBlinking = true;
+    if (millis() - lastEyeBlink > 3150) {
+      isBlinking = false;
+      lastEyeBlink = millis();
+      // Acak arah melirik mata setiap selesai berkedip
+      eyeXOffset = random(-4, 5); 
+    }
+  }
+
+  // 1. MODE ANGRY (Jika Kecepatan Terlalu Tinggi / Overspeed)
+  if (currentMode == "ANGRY" || currentDetail == "RIDE_PANIC") {
+    // Alis Marah / Galak
+    display.drawLine(20, 18, 50, 30, WHITE);
+    display.drawLine(108, 18, 78, 30, WHITE);
+    // Mata Tegas
+    display.fillRoundRect(25, 32, 20, 15, 4, WHITE);
+    display.fillRoundRect(83, 32, 20, 15, 4, WHITE);
+    // Mulut Teriak Segitiga
+    display.fillTriangle(58, 48, 70, 48, 64, 58, WHITE);
+
+    // Bip Buzzer peringatan
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(20);
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+  
+  // 2. MODE HAPPY (Menyapa saat terhubung BLE)
+  else if (currentMode == "HAPPY") {
+    // Mata Lengkung Senang ^ ^
+    display.drawCircle(35, 35, 12, WHITE);
+    display.fillRect(20, 35, 30, 15, BLACK); // Potong bawah
+    display.drawCircle(93, 35, 12, WHITE);
+    display.fillRect(78, 35, 30, 15, BLACK);
+    // Mulut Senyum
+    display.drawCircle(64, 45, 8, WHITE);
+    display.fillRect(54, 37, 20, 10, BLACK);
+  }
+
+  // 3. MODE SLEEP (Saat Bluetooth Terputus)
+  else if (currentMode == "SLEEP" || !deviceConnected) {
+    // Mata Terpejam u u
+    display.drawLine(25, 38, 45, 38, WHITE);
+    display.drawLine(83, 38, 103, 38, WHITE);
+    // Teks Zzz
+    display.setTextSize(1);
+    display.setCursor(110, 15);
+    display.print("z");
+    display.setCursor(116, 8);
+    display.print("Z");
+  }
+
+  // 4. MODE IDLE / NORMAL (Mochi Bernapas, Berkedip & Melirik)
+  else {
+    if (isBlinking) {
+      // Garis Berkedip
+      display.fillRect(25, 35, 22, 4, WHITE);
+      display.fillRect(81, 35, 22, 4, WHITE);
+    } else {
+      // Mata Bulat Mochi dengan Efek Melirik Dinamis
+      display.fillRoundRect(25 + eyeXOffset, 25, 22, 24, 8, WHITE);
+      display.fillRoundRect(81 + eyeXOffset, 25, 22, 24, 8, WHITE);
+      // Kilatan Cahaya Piksel di Mata (Pupil)
+      display.fillRect(28 + eyeXOffset, 28, 6, 6, BLACK);
+      display.fillRect(84 + eyeXOffset, 28, 6, 6, BLACK);
+    }
+    // Mulut Mochi Imut (O-shape / Dot)
+    display.fillCircle(64, 48, 3, WHITE);
+  }
+
+  // Tampilkan Kecepatan di bagian bawah jika dalam Mode Riding
+  if (currentMode == "RIDING") {
+    display.setTextSize(1);
+    display.setCursor(42, 55);
+    display.print(currentSpeed + " KM/H");
+  }
 }
 
 void setup() {
   Serial.begin(115200);
 
-  // Init Pin Buzzer
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
 
-  // Init OLED Display dengan U8g2
-  u8g2.begin();
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_ncenB08_tr);
-  u8g2.drawStr(15, 35, "Mochi Starting...");
-  u8g2.sendBuffer();
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    for (;;);
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(15, 25);
+  display.print("Mochi Starting...");
+  display.display();
   delay(1000);
 
-  // Parse data default awal
   parseMapsData(currentDetail);
 
   // Init BLE
@@ -225,49 +296,24 @@ void setup() {
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
   BLEDevice::startAdvertising();
-
-  Serial.println("BLE Mochi Navigasi Siap!");
 }
 
 void loop() {
-  u8g2.clearBuffer();
+  display.clearDisplay();
 
-  // EVALUASI MODE
   if (currentMode == "MAPS") {
-    // Mode Turn-by-Turn HUD Maps
     renderMapsHUD();
-  } 
-  else {
-    // Mode Animasi Bitmap
-    #if defined(ANIMATION_H) || defined(ANIM_WIDTH)
-      const unsigned char* framePtr = (const unsigned char*)pgm_read_ptr(&(frames[currentFrameIndex]));
-      u8g2.drawXBMP(0, 0, ANIM_WIDTH, ANIM_HEIGHT, framePtr);
-      currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
-    #else
-      u8g2.setFont(u8g2_font_6x10_tr);
-      u8g2.drawStr(30, 35, "MOCHI IDLE");
-    #endif
+  } else {
+    drawLivingMochi();
 
-    // Header Overlay
-    u8g2.setFont(u8g2_font_profont10_tf);
-    u8g2.drawStr(0, 8, currentClock.c_str());
-    if (deviceConnected) u8g2.drawStr(98, 8, "[BLE]");
-    
-    // Fitur Speedometer jika Riding
-    if (currentMode == "RIDING") {
-      String speedText = currentSpeed + " KM/H";
-      u8g2.drawStr(45, 60, speedText.c_str());
-
-      if (currentDetail == "RIDE_PANIC") {
-        digitalWrite(BUZZER_PIN, HIGH);
-        delay(30);
-        digitalWrite(BUZZER_PIN, LOW);
-      }
-    }
+    // Top Header Overlay
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print(currentClock);
+    display.setCursor(98, 0);
+    display.print(deviceConnected ? "[BLE]" : "[OFF]");
   }
 
-  // Kirim Buffer ke OLED
-  u8g2.sendBuffer();
-  
+  display.display();
   delay(50);
 }
