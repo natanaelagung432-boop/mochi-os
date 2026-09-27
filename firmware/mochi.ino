@@ -6,7 +6,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-// Include file animasi bitmap untuk mode selain Maps
+// Include file animasi bitmap
 #include "animasi.h"
 
 // --- KONFIGURASI OLED (U8g2) ---
@@ -21,38 +21,76 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // --- VARIABLE STATE ---
 bool deviceConnected = false;
-String currentSpeed = "0";
-String currentMode  = "NORMAL";
-String currentDetail= "RIGHT,150m,Jl. Pemuda,10m,12.4km"; // Default data MAPS
-String currentClock = "08:45";
+String currentSpeed  = "0";
+String currentMode   = "MAPS"; // Default diset ke MAPS agar langsung terlihat
+String currentDetail = "LEFT,150m,Jl. Pemuda,10m,12.4km";
+String currentClock  = "08:45";
 
-// Variable Parsing Data Maps
-String navDirection = "STRAIGHT";
-String navDistance  = "0m";
-String navStreet    = "-";
-String navETA       = "-";
-String navTotalDist = "0km";
+// Variable Navigasi Maps
+String navDirection = "LEFT";
+String navDistance  = "150m";
+String navStreet    = "Jl. Pemuda";
+String navETA       = "10m";
+String navTotalDist = "12.4km";
 
-// Frame tracker untuk animasi bitmap
+// Frame tracker animasi
 int currentFrameIndex = 0;
+
+// --- FUNGSI PARSING DATA MAPS ---
+void parseMapsData(String data) {
+  data.trim();
+  int c1 = data.indexOf(',');
+  int c2 = data.indexOf(',', c1 + 1);
+  int c3 = data.indexOf(',', c2 + 1);
+  int c4 = data.indexOf(',', c3 + 1);
+
+  if (c1 != -1 && c2 != -1 && c3 != -1) {
+    navDirection = data.substring(0, c1);
+    navDirection.trim();
+    navDirection.toUpperCase();
+
+    navDistance  = data.substring(c1 + 1, c2);
+    navDistance.trim();
+
+    navStreet    = data.substring(c2 + 1, c3);
+    navStreet.trim();
+
+    if (c4 != -1) {
+      navETA       = data.substring(c3 + 1, c4);
+      navETA.trim();
+      navTotalDist = data.substring(c4 + 1);
+      navTotalDist.trim();
+    } else {
+      navETA       = data.substring(c3 + 1);
+      navETA.trim();
+      navTotalDist = "";
+    }
+  }
+}
 
 // --- CALLBACK BLE ---
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       deviceConnected = true;
+      Serial.println("[BLE] Device Terhubung!");
     };
 
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
-      BLEDevice::startAdvertising(); // Restart advertising jika terputus
+      Serial.println("[BLE] Device Terputus! Re-advertising...");
+      BLEDevice::startAdvertising();
     }
 };
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
       String rxValue = pCharacteristic->getValue().c_str();
+      rxValue.trim();
 
       if (rxValue.length() > 0) {
+        Serial.print("[BLE Data Masuk]: ");
+        Serial.println(rxValue);
+
         // Parsing Payload: Kecepatan | Mode | Detail | Jam
         int firstPipe  = rxValue.indexOf('|');
         int secondPipe = rxValue.indexOf('|', firstPipe + 1);
@@ -64,38 +102,18 @@ class MyCallbacks: public BLECharacteristicCallbacks {
           currentDetail = rxValue.substring(secondPipe + 1, thirdPipe);
           currentClock  = rxValue.substring(thirdPipe + 1);
 
-          // Jika masuk mode MAPS, parse sub-parameter currentDetail
-          // Format currentDetail MAPS: ARAH,JARAK_BELOK,NAMA_JALAN,ETA,TOTAL_JARAK
-          // Contoh: LEFT,150m,Jl. Pemuda,10m,12.4km
+          currentMode.trim();
+          currentMode.toUpperCase();
+
           if (currentMode == "MAPS") {
             parseMapsData(currentDetail);
           }
         }
       }
     }
-
-    void parseMapsData(String data) {
-      int c1 = data.indexOf(',');
-      int c2 = data.indexOf(',', c1 + 1);
-      int c3 = data.indexOf(',', c2 + 1);
-      int c4 = data.indexOf(',', c3 + 1);
-
-      if (c1 != -1 && c2 != -1 && c3 != -1) {
-        navDirection = data.substring(0, c1);
-        navDistance  = data.substring(c1 + 1, c2);
-        navStreet    = data.substring(c2 + 1, c3);
-        if (c4 != -1) {
-          navETA       = data.substring(c3 + 1, c4);
-          navTotalDist = data.substring(c4 + 1);
-        } else {
-          navETA       = data.substring(c3 + 1);
-          navTotalDist = "";
-        }
-      }
-    }
 };
 
-// --- FUNGSI MENGGAMBAR IKON PANAH NAVIGASI (50x50px Area) ---
+// --- FUNGSI MENGGAMBAR IKON PANAH NAVIGASI ---
 void drawNavIcon(String dir) {
   if (dir == "LEFT") {
     u8g2.drawTriangle(5, 36, 25, 20, 25, 52);
@@ -119,9 +137,9 @@ void drawNavIcon(String dir) {
     u8g2.drawCircle(25, 28, 14, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
     u8g2.drawBox(11, 28, 6, 20);
     u8g2.drawBox(33, 28, 6, 10);
-    u8g2.drawTriangle(8, 48, 20, 48, 14, 55); // Kepala panah turun
+    u8g2.drawTriangle(8, 48, 20, 48, 14, 55);
   } 
-  else { // STRAIGHT
+  else { // STRAIGHT / DEFAULT
     u8g2.drawTriangle(25, 16, 10, 33, 40, 33);
     u8g2.drawBox(20, 33, 10, 20);
   }
@@ -134,7 +152,7 @@ void renderMapsHUD() {
   u8g2.drawStr(0, 8, currentClock.c_str());
   
   if (navTotalDist.length() > 0) {
-    u8g2.drawStr(65, 8, navTotalDist.c_str());
+    u8g2.drawStr(60, 8, navTotalDist.c_str());
   }
   
   if (deviceConnected) {
@@ -153,20 +171,19 @@ void renderMapsHUD() {
   u8g2.drawVLine(51, 11, 53);
 
   // 3. Teks Informasi Navigasi (Area Kanan: x=54..128)
-  // Baris 1: Jarak ke Belokan (Font Tegas & Besar)
+  // Jarak ke Belokan
   u8g2.setFont(u8g2_font_7x14B_tr);
   u8g2.drawStr(55, 26, navDistance.c_str());
 
-  // Baris 2: Nama Jalan (Font Sedang)
+  // Nama Jalan
   u8g2.setFont(u8g2_font_6x10_tr);
-  // Potong teks jika nama jalan terlalu panjang agar tidak overlap
   String shortStreet = navStreet;
   if (shortStreet.length() > 11) {
     shortStreet = shortStreet.substring(0, 10) + ".";
   }
   u8g2.drawStr(55, 41, shortStreet.c_str());
 
-  // Baris 3: Estimasi Tiba / ETA (Font Kecil)
+  // Estimasi Tiba (ETA)
   u8g2.setFont(u8g2_font_micro_tr);
   String etaText = "ETA: " + navETA;
   u8g2.drawStr(55, 58, etaText.c_str());
@@ -186,6 +203,9 @@ void setup() {
   u8g2.drawStr(15, 35, "Mochi Starting...");
   u8g2.sendBuffer();
   delay(1000);
+
+  // Parse data default awal
+  parseMapsData(currentDetail);
 
   // Init BLE
   BLEDevice::init("Mochi-ESP32");
@@ -212,25 +232,28 @@ void setup() {
 void loop() {
   u8g2.clearBuffer();
 
-  // RENDER BERDASARKAN MODE
+  // EVALUASI MODE
   if (currentMode == "MAPS") {
     // Mode Turn-by-Turn HUD Maps
     renderMapsHUD();
   } 
   else {
-    // Mode Ekspresi / Idle: Putar animasi bitmap dari animasi.h
-    const unsigned char* framePtr = (const unsigned char*)pgm_read_ptr(&(frames[currentFrameIndex]));
-    u8g2.drawXBMP(0, 0, ANIM_WIDTH, ANIM_HEIGHT, framePtr);
+    // Mode Animasi Bitmap
+    #if defined(ANIMATION_H) || defined(ANIM_WIDTH)
+      const unsigned char* framePtr = (const unsigned char*)pgm_read_ptr(&(frames[currentFrameIndex]));
+      u8g2.drawXBMP(0, 0, ANIM_WIDTH, ANIM_HEIGHT, framePtr);
+      currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
+    #else
+      u8g2.setFont(u8g2_font_6x10_tr);
+      u8g2.drawStr(30, 35, "MOCHI IDLE");
+    #endif
 
-    // Increment frame animasi
-    currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
-
-    // Header Overlay sederhana
+    // Header Overlay
     u8g2.setFont(u8g2_font_profont10_tf);
     u8g2.drawStr(0, 8, currentClock.c_str());
     if (deviceConnected) u8g2.drawStr(98, 8, "[BLE]");
     
-    // Fitur Speedometer jika dalam Riding Mode
+    // Fitur Speedometer jika Riding
     if (currentMode == "RIDING") {
       String speedText = currentSpeed + " KM/H";
       u8g2.drawStr(45, 60, speedText.c_str());
@@ -246,6 +269,5 @@ void loop() {
   // Kirim Buffer ke OLED
   u8g2.sendBuffer();
   
-  // Frame delay
   delay(50);
 }
