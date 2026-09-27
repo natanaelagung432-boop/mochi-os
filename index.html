@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mochi Dash HUD Controller</title>
+  <title>Mochi Controller</title>
   <style>
     * {
       box-sizing: border-box;
@@ -68,12 +68,12 @@
       width: 12px;
       height: 12px;
       border-radius: 50%;
-      background-color: #ef4444; /* Merah = Terputus */
+      background-color: #ef4444;
       box-shadow: 0 0 8px #ef4444;
     }
 
     .dot.connected {
-      background-color: #22c55e; /* Hijau = Terhubung */
+      background-color: #22c55e;
       box-shadow: 0 0 8px #22c55e;
     }
 
@@ -93,12 +93,8 @@
     }
 
     .btn-connect {
-      background-color: #0284c7;
+      background-color: #22c55e;
       color: white;
-    }
-
-    .btn-connect:hover {
-      background-color: #0369a1;
     }
 
     .btn-disconnect {
@@ -115,7 +111,7 @@
     .speed-display {
       font-size: 4rem;
       font-weight: 800;
-      color: #38bdf8;
+      color: #22c55e;
       line-height: 1;
       margin: 15px 0 5px 0;
     }
@@ -174,7 +170,7 @@
       border-radius: 8px;
       border: 1px solid #334155;
       background-color: #0f172a;
-      color: #white;
+      color: white;
       font-size: 1rem;
     }
 
@@ -195,7 +191,6 @@
     <p class="subtitle">Bluetooth GPS Speedometer & HUD</p>
   </header>
 
-  <!-- KARTU KONEKSI -->
   <div class="card">
     <div class="status-container">
       <span>Status Perangkat:</span>
@@ -209,11 +204,10 @@
     <button id="disconnectBtn" class="btn btn-disconnect hidden">Putuskan Koneksi</button>
   </div>
 
-  <!-- KARTU DASHBOARD SPEEDOMETER -->
   <div class="card dashboard" id="dashboardCard">
-    <div class="info-label">Kecepatan Kendaraan</div>
+    <div class="info-label">Kecepatan Real-time</div>
     <div id="speedDisplay" class="speed-display">0</div>
-    <div class="speed-unit">KM/JAM</div>
+    <div class="speed-unit">KM/H</div>
 
     <div class="info-grid">
       <div class="info-box">
@@ -222,18 +216,17 @@
       </div>
       <div class="info-box">
         <div class="info-label">Ekspresi Mochi</div>
-        <div id="moodDisplay" class="info-value">IDLE</div>
+        <div id="moodDisplay" class="info-value">NORMAL</div>
       </div>
     </div>
 
     <div class="input-group">
-      <label for="speedLimitInput">Batas Kecepatan / Speed Limit (KM/H):</label>
+      <label for="speedLimitInput">Set Speed Limit: (KM/H)</label>
       <input type="number" id="speedLimitInput" value="80" min="10" max="200">
     </div>
   </div>
 
   <script>
-    // --- KONFIGURASI BLE ---
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
@@ -244,7 +237,6 @@
     let currentSpeed = 0;
     let speedLimit = 80;
 
-    // --- ELEMENT REFRESH ---
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
     const statusDot = document.getElementById('statusDot');
@@ -255,7 +247,6 @@
     const speedLimitInput = document.getElementById('speedLimitInput');
     const dashboardCard = document.getElementById('dashboardCard');
 
-    // --- UPDATE EVENT HANDLERS ---
     speedLimitInput.addEventListener('change', (e) => {
       speedLimit = parseInt(e.target.value) || 80;
     });
@@ -274,13 +265,11 @@
         const service = await server.getPrimaryService(SERVICE_UUID);
         bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-        // Update UI Koneksi
         statusDot.classList.add('connected');
         statusText.innerText = "Terhubung";
         connectBtn.classList.add('hidden');
         disconnectBtn.classList.remove('hidden');
 
-        // Jalankan GPS & Timer Pengiriman Data
         startGPSWatch();
         setInterval(sendDataToMochi, 1000);
 
@@ -307,14 +296,13 @@
       }
     }
 
-    // --- FUNGSI GPS & DATA ---
     function startGPSWatch() {
       if ("geolocation" in navigator) {
         watchId = navigator.geolocation.watchPosition(
           (position) => {
             let speedMps = position.coords.speed;
             if (speedMps !== null && speedMps > 0) {
-              currentSpeed = Math.round(speedMps * 3.6); // M/s ke KM/H
+              currentSpeed = Math.round(speedMps * 3.6);
             } else {
               currentSpeed = 0;
             }
@@ -340,12 +328,11 @@
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const timeStr = `${hours}:${minutes}`;
 
-      let mood = "IDLE";
+      let mood = "NORMAL";
       if (currentSpeed > speedLimit) {
         mood = "OVERSPEED";
       }
 
-      // Format Paket Data: Kecepatan|Mood|Jam|SpeedLimit
       const payload = `${currentSpeed}|${mood}|${timeStr}|${speedLimit}`;
 
       const encoder = new TextEncoder();
