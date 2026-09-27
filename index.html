@@ -49,29 +49,29 @@
       border: 1px solid #334155;
     }
 
-    /* --- SIMULATOR LAYAR MOCHI (OLED TANPA TEKS) --- */
+    /* --- OLED MOCHI SCREEN --- */
     .mochi-screen-container {
       background-color: #000000;
       border: 4px solid #334155;
       border-radius: 20px;
-      padding: 20px;
+      padding: 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 150px;
+      min-height: 160px;
       position: relative;
       overflow: hidden;
-      box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.05);
+      box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.05);
       margin-bottom: 15px;
     }
 
-    /* Wajah Mochi (Mata & Mulut) */
     .mochi-face {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
+      transition: all 0.2s ease;
     }
 
     .eyes-container {
@@ -79,24 +79,30 @@
       align-items: center;
       justify-content: space-between;
       width: 130px;
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
     .eye {
       width: 28px;
-      height: 38px;
+      height: 40px;
       background-color: #ffffff;
-      border-radius: 8px;
+      border-radius: 10px;
       transition: all 0.2s ease;
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
     }
 
-    /* Animasi Berkedip Normal */
+    /* --- VARIASI MATA --- */
     .eye.blink {
       height: 4px !important;
-      margin-top: 17px;
+      margin-top: 18px;
     }
 
-    /* Mata Kaget / Overspeed */
+    .eye.sleepy {
+      height: 14px !important;
+      margin-top: 13px;
+      border-radius: 4px 4px 10px 10px;
+    }
+
     .eye.shocked {
       width: 36px;
       height: 36px;
@@ -106,41 +112,57 @@
       animation: pulseShock 0.3s infinite alternate;
     }
 
-    /* Mata Senang / Happy */
     .eye.happy {
-      height: 14px;
-      border-radius: 14px 14px 0 0;
+      height: 16px;
+      border-radius: 16px 16px 0 0;
       background-color: #38bdf8;
-      box-shadow: 0 0 10px #38bdf8;
+      box-shadow: 0 0 12px #38bdf8;
     }
 
-    /* DESAIN MULUT EKSPRESIF */
+    /* Melirik Kiri / Kanan */
+    .look-left { transform: translateX(-18px); }
+    .look-right { transform: translateX(18px); }
+
+    /* --- VARIASI MULUT --- */
     .mouth {
-      width: 16px;
+      width: 20px;
       height: 6px;
       background-color: #ffffff;
-      border-radius: 3px;
+      border-radius: 4px;
       transition: all 0.2s ease;
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
     }
 
-    /* Mulut Happy (Senyum) */
     .mouth.happy {
-      width: 24px;
-      height: 10px;
+      width: 28px;
+      height: 12px;
       background-color: transparent;
       border-bottom: 4px solid #38bdf8;
-      border-radius: 0 0 12px 12px;
+      border-radius: 0 0 14px 14px;
       box-shadow: none;
     }
 
-    /* Mulut Kaget (Membuka O) */
+    .mouth.yawn {
+      width: 16px;
+      height: 22px;
+      border-radius: 10px;
+      background-color: #ffffff;
+    }
+
+    .mouth.whistle {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #38bdf8;
+      transform: translateX(6px);
+    }
+
     .mouth.shocked {
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       background-color: #ef4444;
-      box-shadow: 0 0 10px #ef4444;
+      box-shadow: 0 0 12px #ef4444;
       animation: pulseShock 0.3s infinite alternate;
     }
 
@@ -149,7 +171,7 @@
       100% { transform: scale(1.15); }
     }
 
-    /* --- STATUS & KONTROL --- */
+    /* --- BUTTONS & CONTROLS --- */
     .status-container {
       display: flex;
       align-items: center;
@@ -221,7 +243,7 @@
       justify-content: center;
     }
 
-    /* --- DASHBOARD DISPLAY --- */
+    /* --- DASHBOARD --- */
     .speed-display {
       font-size: 3.8rem;
       font-weight: 800;
@@ -309,11 +331,11 @@
     <p class="subtitle">Virtual OLED & BLE HUD</p>
   </header>
 
-  <!-- KARTU MOCHI VIRTUAL OLED SCREEN (TANPA TEKS) -->
+  <!-- KARTU MOCHI OLED ANIMATED -->
   <div class="card">
     <div class="mochi-screen-container" id="screenBox">
       <div class="mochi-face">
-        <div class="eyes-container">
+        <div class="eyes-container" id="eyesContainer">
           <div class="eye" id="leftEye"></div>
           <div class="eye" id="rightEye"></div>
         </div>
@@ -323,7 +345,7 @@
 
     <!-- TESTER EKSPRESI -->
     <div class="test-group">
-      <button class="btn-test" onclick="setMood('NORMAL')">Normal</button>
+      <button class="btn-test" onclick="setMood('NORMAL')">Gabut</button>
       <button class="btn-test" onclick="setMood('HAPPY')">Happy</button>
       <button class="btn-test" onclick="setMood('OVERSPEED')">Kaget</button>
     </div>
@@ -390,19 +412,23 @@
 
     const leftEye = document.getElementById('leftEye');
     const rightEye = document.getElementById('rightEye');
+    const eyesContainer = document.getElementById('eyesContainer');
     const mochiMouth = document.getElementById('mochiMouth');
     const screenBox = document.getElementById('screenBox');
 
-    // --- LOGIKA ANIMASI WAJAH MOCHI (MATA & MULUT) ---
+    // --- MANAJEMEN EKSPRESI ---
+    function resetFace() {
+      leftEye.className = "eye";
+      rightEye.className = "eye";
+      eyesContainer.className = "eyes-container";
+      mochiMouth.className = "mouth";
+      screenBox.classList.remove('overspeed-alert');
+    }
+
     function setMood(mood) {
       activeMood = mood;
       moodDisplay.innerText = mood;
-
-      // Reset Kelas Wajah
-      leftEye.className = "eye";
-      rightEye.className = "eye";
-      mochiMouth.className = "mouth";
-      screenBox.classList.remove('overspeed-alert');
+      resetFace();
 
       if (mood === "OVERSPEED") {
         leftEye.classList.add('shocked');
@@ -416,19 +442,49 @@
       }
     }
 
-    // Animasi Berkedip Otomatis saat Mode Normal
-    setInterval(() => {
-      if (activeMood === "NORMAL") {
+    // --- ANIMASI AGILE / ORANG GABUT (RANDOM BEHAVIOR) ---
+    function triggerRandomIdleAction() {
+      if (activeMood !== "NORMAL") return;
+
+      resetFace();
+      const actions = ["blink", "look_left", "look_right", "yawn", "whistle", "wink"];
+      const randomAction = actions[Math.floor(Math.random() * actions.length)];
+
+      if (randomAction === "blink") {
         leftEye.classList.add('blink');
         rightEye.classList.add('blink');
-        setTimeout(() => {
-          leftEye.classList.remove('blink');
-          rightEye.classList.remove('blink');
-        }, 180);
-      }
-    }, 3500);
+        setTimeout(resetFace, 200);
 
-    // --- LOGIKA BLE & GPS ---
+      } else if (randomAction === "look_left") {
+        eyesContainer.classList.add('look-left');
+        setTimeout(resetFace, 1500);
+
+      } else if (randomAction === "look_right") {
+        eyesContainer.classList.add('look-right');
+        setTimeout(resetFace, 1500);
+
+      } else if (randomAction === "yawn") {
+        leftEye.classList.add('sleepy');
+        rightEye.classList.add('sleepy');
+        mochiMouth.classList.add('yawn');
+        setTimeout(resetFace, 2000);
+
+      } else if (randomAction === "whistle") {
+        leftEye.classList.add('happy');
+        rightEye.classList.add('happy');
+        mochiMouth.classList.add('whistle');
+        setTimeout(resetFace, 1800);
+
+      } else if (randomAction === "wink") {
+        leftEye.classList.add('blink');
+        setTimeout(resetFace, 300);
+      }
+    }
+
+    // Jalankan gerakan acak setiap 3.5 - 6 detik sekali
+    setInterval(triggerRandomIdleAction, 4000);
+
+    // --- BLE & GPS LOGIC ---
     speedLimitInput.addEventListener('change', (e) => {
       speedLimit = parseInt(e.target.value) || 80;
     });
@@ -513,7 +569,7 @@
       if (currentSpeed > speedLimit) {
         setMood("OVERSPEED");
       } else if (activeMood !== "HAPPY") {
-        setMood("NORMAL");
+        if (activeMood === "OVERSPEED") setMood("NORMAL");
       }
 
       const payload = `${currentSpeed}|${activeMood}|${timeStr}|${speedLimit}`;
