@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mochi BLE Controller</title>
+    <style>
+        :root {
+            --bg-color: #0d0f12;
+            --card-bg: #161b22;
+            --accent-green: #00ff87;
+            --accent-red: #ff3366;
+            --accent-blue: #60a5fa;
+            --text-main: #f0f6fc;
+            --text-sub: #8b949e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #21262d;
+            color: var(--text-sub);
+        }
+
+        .status-badge.connected {
+            background: rgba(0, 255, 135, 0.15);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+        }
+
+        .speed-card {
+            background: var(--card-bg);
+            width: 100%;
+            max-width: 400px;
+            margin: 20px 0;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #21262d;
+        }
+
+        .speed-val {
+            font-size: 4.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        .speed-unit {
+            font-size: 1rem;
+            color: var(--text-sub);
+            margin-top: 5px;
+            letter-spacing: 2px;
+        }
+
+        .btn-connect {
+            width: 100%;
+            max-width: 400px;
+            padding: 16px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent-green);
+            color: #000;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-connect.connected {
+            background: var(--accent-red);
+            color: #fff;
+        }
+
+        .section-title {
+            width: 100%;
+            max-width: 400px;
+            margin: 25px 0 10px 0;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .mood-grid {
+            width: 100%;
+            max-width: 400px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .mood-btn {
+            background: var(--card-bg);
+            border: 1px solid #30363d;
+            color: var(--text-main);
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .mood-btn:active {
+            background: #21262d;
+            border-color: var(--accent-blue);
+        }
+
+        .footer-info {
+            margin-top: auto;
+            padding-top: 20px;
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>MOCHI BLE</h2>
+        <span id="status" class="status-badge">DISCONNECTED</span>
+    </div>
+
+    <div class="speed-card">
+        <div id="speed" class="speed-val">0</div>
+        <div class="speed-unit">KM / H</div>
+    </div>
+
+    <button id="connectBtn" class="btn-connect" onclick="toggleConnect()">CONNECT MOCHI</button>
+
+    <div class="section-title">Manual Preset Mood</div>
+    <div class="mood-grid">
+        <button class="mood-btn" onclick="sendMood('HAPPY')">( ^ v ^ ) Happy</button>
+        <button class="mood-btn" onclick="sendMood('SLEEPY')">( - _ - ) Sleepy</button>
+        <button class="mood-btn" onclick="sendMood('SAD')">( > _ < ) Sad</button>
+        <button class="mood-btn" onclick="sendMood('EXCITED')">( > w < ) Speeding</button>
+    </div>
+
+    <div class="footer-info">
+        Direct Web Bluetooth Controller<br>
+        Screen Wake Lock: <span id="wakelock">NONAKTIF</span>
+    </div>
+
+    <script>
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        let bleDevice;
+        let gattServer;
+        let bluetoothCharacteristic;
+        let wakeLock = null;
+        let currentSpeed = 0;
+        let currentMood = "IDLE";
+
+        async function toggleConnect() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                disconnectBLE();
+            } else {
+                connectBLE();
+            }
+        }
+
+        async function connectBLE() {
+            try {
+                console.log("Requesting Bluetooth Device...");
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'DASAI_MOCHI' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                gattServer = await bleDevice.gatt.connect();
+                const service = await gattServer.getPrimaryService(SERVICE_UUID);
+                bluetoothCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+                document.getElementById('status').innerText = "CONNECTED ●";
+                document.getElementById('status').classList.add('connected');
+                
+                const btn = document.getElementById('connectBtn');
+                btn.innerText = "DISCONNECT MOCHI";
+                btn.classList.add('connected');
+
+                requestWakeLock();
+                startGPS();
+
+            } catch (error) {
+                console.log("BLE Error: " + error);
+            }
+        }
+
+        function disconnectBLE() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+        }
+
+        function onDisconnected() {
+            document.getElementById('status').innerText = "DISCONNECTED";
+            document.getElementById('status').classList.remove('connected');
+            
+            const btn = document.getElementById('connectBtn');
+            btn.innerText = "CONNECT MOCHI";
+            btn.classList.remove('connected');
+
+            if (wakeLock) wakeLock.release();
+        }
+
+        async function sendDataToMochi(speed, mood) {
+            if (bluetoothCharacteristic && bleDevice.gatt.connected) {
+                try {
+                    const dataString = `${speed}|${mood}`;
+                    const encoder = new TextEncoder();
+                    await bluetoothCharacteristic.writeValue(encoder.encode(dataString));
+                } catch (e) {
+                    console.log("Send failed: " + e);
+                }
+            }
+        }
+
+        function sendMood(moodName) {
+            currentMood = moodName;
+            sendDataToMochi(currentSpeed, currentMood);
+        }
+
+        function startGPS() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.watchPosition(
+                    (position) => {
+                        let speedMS = position.coords.speed; // Speed dalam meter/detik
+                        if (speedMS === null || isNaN(speedMS) || speedMS < 0) speedMS = 0;
+                        
+                        currentSpeed = Math.round(speedMS * 3.6); // Konversi ke KM/H
+                        document.getElementById('speed').innerText = currentSpeed;
+
+                        if (currentSpeed > 60) {
+                            currentMood = "EXCITED";
+                        } else if (currentSpeed > 0) {
+                            currentMood = "HAPPY";
+                        }
+
+                        sendDataToMochi(currentSpeed, currentMood);
+                    },
+                    (error) => console.log("GPS Error: " + error.message),
+                    { enableHighAccuracy: true }
+                );
+            }
+        }
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    document.getElementById('wakelock').innerText = "AKTIF";
+                }
+            } catch (err) {
+                console.log("WakeLock Error: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
